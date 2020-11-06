@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python2
 
 import roslib
 import sys
@@ -23,6 +23,7 @@ class image_converter:
     self.image_sub2 = rospy.Subscriber("/camera2/robot/image_raw",Image,self.callback2)
     # initialize the bridge between openCV and ROS
     self.bridge = CvBridge()
+    self.first_time = rospy.get_time()
 
 
   # Recieve data, process it, and publish
@@ -32,13 +33,19 @@ class image_converter:
       self.cv_image2 = self.bridge.imgmsg_to_cv2(data, "bgr8")
     except CvBridgeError as e:
       print(e)
+
+    cur_time = np.array([int(rospy.get_time() - self.first_time)])
+
     # Uncomment if you want to save the image
-    #cv2.imwrite('image_copy.png', cv_image)
+    cv2.imwrite(str(cur_time)+'.png', self.cv_image2)
+    print(cur_time)
+
+
     im2=cv2.imshow('window2', self.cv_image2)
     cv2.waitKey(1)
 
     # Publish the results
-    try: 
+    try:
       self.image_pub2.publish(self.bridge.cv2_to_imgmsg(self.cv_image2, "bgr8"))
     except CvBridgeError as e:
       print(e)
@@ -55,5 +62,3 @@ def main(args):
 # run the code if the node is called
 if __name__ == '__main__':
     main(sys.argv)
-
-

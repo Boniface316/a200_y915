@@ -42,6 +42,7 @@ def move():
     joint5.data=  y_d
     joint6=Float64()
     joint6.data= 7.5
+    print(joint3.data)
     robot_joint4_pub.publish(joint4)
     robot_joint5_pub.publish(joint5)
     robot_joint6_pub.publish(joint6)

@@ -5,13 +5,13 @@ import sys
 import rospy
 import cv2
 import math
-import utils2
 import numpy as np
 from std_msgs.msg import String
 from sensor_msgs.msg import Image
 from std_msgs.msg import Float64MultiArray, Float64
 from cv_bridge import CvBridge, CvBridgeError
 from scipy.spatial import distance as dist
+import pandas as pd
 
 
 class image_converter:
@@ -140,8 +140,40 @@ class image_converter:
             distance = np.sum((circle1pos - circle2pos) ** 2)
             return 3.5 / np.sqrt(distance)
 
+        def get_centroids(self,image1,image2):
+            red_posn = detect_red(self,image1,image2)
+            blue_posn = detect_blue(self,image1,image2)
+            yellow_posn = detect_yellow(self,image1, image2)
+            green_posn = detect_green(self,image1, image2)
+            return yellow_posn, blue_posn, green_posn, red_posn
+
+        def create_center_positions(yellow_posn, blue_posn, green_posn, red_posn):
+            colours_order = ["yellow", "blue", "green", "red"]
+            center_position = dict.fromkeys(colours_order)
+            center_position["yellow"] = yellow_posn
+            center_position["blue"] = blue_posn
+            center_position["green"] = green_posn
+            center_position["red"] = red_posn
+            return center_position
+
+        def change_origin(centroids_positions, joint_color):
+            centroids_posn_pd = pd.DataFrame.from_dict(centroids_positions, orient='index', columns=['X', 'Y', 'Z', 'Z2'])
+            centroids_posn_pd = centroids_posn_pd.drop(columns = "Z2")
+            centroids_posn_pd['Z'] = 800 - centroids_posn_pd['Z']
+            centroids_posn_pd['X'] = centroids_posn_pd['X'] - centroids_posn_pd.loc[joint_color, 'X']
+            centroids_posn_pd['Y'] = centroids_posn_pd['Y'] - centroids_posn_pd.loc[joint_color, 'Y']
+            centroids_posn_pd['Z'] = centroids_posn_pd['Z'] - centroids_posn_pd.loc[joint_color, 'Z']
+            return centroids_posn_pd
+
+        def create_xyz_table(self,image1, image2, origin):
+            yellow_posn, blue_posn, green_posn, red_posn  = get_centroids(self,image1, image2)
+            center_position = create_center_positions(yellow_posn, blue_posn, green_posn, red_posn)
+            xyz_table = change_origin(center_position, origin)
+            return xyz_table
+
+
         def angle_detection_blob(self,image1, image2):
-            xyz_blob = utils2.create_xyz_table(self.image1, self.image2, "yellow")
+            xyz_blob = create_xyz_table(self,self.image1, self.image2, "yellow")
 
             green_posn = xyz_blob.loc["green",]
             blue_posn = xyz_blob.loc["blue",]
@@ -151,10 +183,18 @@ class image_converter:
             ja2_blob = np.arctan2((blue_posn[1] - green_posn[1]), -(blue_posn[2] - green_posn[2]))
             #ja2_blob = utils2.angle_normalization(ja2_blob)
             ja3_blob = np.arctan2((blue_posn[0] - green_posn[0]), (blue_posn[2] - green_posn[2]))
-            ja3_blob = utils2.angle_normalization(ja3_blob)
+            ja3_blob = angle_normalization(ja3_blob)
             ja4_blob = np.arctan2(green_posn[1] - red_posn[1], -(green_posn[2] - red_posn[2]))
-            ja4_blob = utils2.angle_normalization(ja4_blob) - ja2_blob
+            ja4_blob = angle_normalization(ja4_blob) - ja2_blob
             return np.array([ja1_blob, ja2_blob, ja3_blob, ja4_blob])
+
+        def angle_normalization(angle):
+            angle=angle%np.pi
+            if (angle > np.pi/2):
+                angle=(angle-np.pi/2)
+            elif(angle <= np.pi/2):
+                angle=(angle+np.pi/2)
+            return angle
 
         def angle_trajectory(self):
             curr_time = np.array([rospy.get_time() - self.time_trajectory])
@@ -347,7 +387,7 @@ class image_converter:
         self.joint4.data = ja4
 
         # # Publishing the desired trajectory on a topic named trajectory(for lab 3)
-        x_d =flying_object_location(self,self.image1,self.image2)   # getting the desired trajectory
+        #x_d =flying_object_location(self,self.image1,self.image2)   # getting the desired trajectory
         # self.trajectory_desired = Float64MultiArray()
         # self.trajectory_desired.data = x_d
 
@@ -377,4 +417,3 @@ def main(args):
 # run the code if the node is called
 if __name__ == '__main__':
     main(sys.argv)
-
