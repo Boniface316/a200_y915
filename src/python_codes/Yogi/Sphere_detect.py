@@ -6,6 +6,8 @@ import rospy
 import cv2
 import math
 import numpy as np
+import statistics
+import imutils
 from std_msgs.msg import String
 from sensor_msgs.msg import Image
 from std_msgs.msg import Float64MultiArray, Float64
@@ -140,62 +142,65 @@ class image_converter:
             ct = int(M2['m01'] / M2['m00'])
             return np.array([cx, cy, cz, ct])
 
+        def detect_shape(self,mask, template):
+            startX = []
+            startY = []
+            endX = []
+            endY = []
+            w, h = template.shape[::-1]
+            for scale in np.linspace(0.79, 1.0, 5)[::-1]:
+                found = None
+                resized = imutils.resize(mask, width = int(mask.shape[1] * scale))
+                r = mask.shape[1]/float(resized.shape[1])
+                if resized.shape[0] < h or resized.shape[1] < w:
+                    break
+
+                res = cv2.matchTemplate(resized,template,cv2.TM_CCOEFF_NORMED)
+                loc = np.where( res > threshold)
+                (_, maxVal, _, maxLoc) = cv2.minMaxLoc(res)
+
+                if found is None or maxVal > found[0]:
+                    found = (maxVal, maxLoc, r)
+
+                    #(startX, startY) = (int(maxLoc[0] * r), int(maxLoc[1] * r))
+                    #(endX, endY) = (int((maxLoc[0] + w) * r), int((maxLoc[1] + h) * r))
+                    # draw a bounding box around the detected result and display the image
 
 
+                startX.append(int(maxLoc[0] * r))
+                startY.append(int(maxLoc[1] * r))
+                endX.append(int((maxLoc[0] + w) * r))
+                endY.append(int((maxLoc[1] + h) * r))
 
+            centerX = (statistics.mean(endX) + statistics.mean(startX))/2
+            centerY = (statistics.mean(endY) + statistics.mean(startY))/2
 
-        def detect_shape(self,contour):
-            shape = "Unknown"
-            peri = cv2.arcLength(contour, True)
-            #print("perimeter of the shape", peri)
-            approx = cv2.approxPolyDP(contour, 0.04 * peri, True)
-            if len(approx) == 4 and  peri<45:
-                (x, y, w, h) = cv2.boundingRect(approx)
-                ar = w / float(h)
-                if ar<=1.05:
-                    M = cv2.moments(approx)
-                    cx = int(M['m10'] / M['m00'])
-                    cy = int(M['m01'] / M['m00'])
-                    shape = "rectangle"
-            else: shape="circle"
-            M = cv2.moments(approx)
-            cx = int(M['m10'] / M['m00'])
-            cy = int(M['m01'] / M['m00'])
-            #if ar >= 0.95 and ar <= 1.05 else "rectangle"
-            return  np.array([shape,cx, cy])
+            return centerX, centerY
 
-        def flying_object_location(self,image1,image2):
+        def flying_object_location(self,image1,image2, template, threshold):
             hsv_convert_1 = cv2.cvtColor(image1, cv2.COLOR_BGR2HSV)
             hsv_convert_2 = cv2.cvtColor(image2, cv2.COLOR_BGR2HSV)
-            mask1 = cv2.inRange(hsv_convert_1, (16, 69, 127), (19, 155, 213))
-            #mask1 = cv2.inRange(image1, (0, 0, 100), (0, 0, 255))
-            mask2 = cv2.inRange(hsv_convert_2, (16, 69, 127), (19, 155, 213))
-            #mask2 = cv2.inRange(image1, (0, 0, 100), (0, 0, 255))
+            mask1 = cv2.inRange(hsv_convert_1, (10, 202, 0), (27, 255, 255))
+            mask2 = cv2.inRange(hsv_convert_2, (10, 202, 0), (27, 255, 255))
             kernel = np.ones((2, 2), np.uint8)
             mask1 = cv2.dilate(mask1, kernel, iterations=1)
             mask2 = cv2.dilate(mask2, kernel, iterations=1)
-            contours1, _ = cv2.findContours(mask1, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
-            contours2, _ = cv2.findContours(mask2, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
-            cv2.drawContours(image1, contours1, -1, (0, 0, 255), 2)
-            cv2.drawContours(image2, contours2, -1, (0, 0, 255), 2)
+
+            centerY, centerZ1 = detect_shape(self, mask1, template)
+            centerX, centerZ2 = detect_shape(self, mask2, template)
+
             p = pixelTometer(self, image1, image2)
 
-    
-            for i in range(len(contours1)):
-                shape,cy,cz1 = detect_shape(self, contours1[i])
-                if(shape=="circle"):
-                    shape_new1,cy,cz1=shape,cy,cz1
-            for i in range(len(contours2)):
-                shape, cx, cz2 = detect_shape(self, contours2[i])
-                print(cx)
-                if (shape == "circle"):
-                    shape_new2,cx,cz2=shape,cx,cz2
-
             loc=np.array([0,0,0,0])
+            #TODO: investigate
             loc_final=p*detect_yellow(self,self.image1,self.image2)-loc
-            image = cv2.circle(image1, (int(cx), int(cz2)), radius=2, color=(255, 255, 255), thickness=-1)
-            cv2.imshow("image", image1)
-            return shape_new1,shape_new2,loc_final
+
+            image1 = cv2.circle(image1, (int(centerY), int(centerZ1)), radius=2, color=(255, 255, 255), thickness=-1)
+            image2 = cv2.circle(image2, (int(centerX), int(centerZ2)), radius=2, color=(255, 255, 255), thickness=-1)
+
+            cv2.imshow("image1", image1)
+            cv2.imshow("image2", image2)
+            return
 
 
 #------------------------------------------------------------------------------------------
@@ -230,9 +235,12 @@ class image_converter:
         self.joint4.data = 0
 
         # # Publishing the desired trajectory on a topic named trajectory(for lab 3)
+        threshold = 0.4
+
+        template = cv2.imread("/home/boniface/catkin_ws/src/ivr_assignment/src/images/cropped.png",0)
 
 
-        x_d =flying_object_location(self,self.image1,self.image2)   # getting the desired trajectory
+        x_d =flying_object_location(self,self.image1,self.image2, template, 0.8)   # getting the desired trajectory
 
         # self.trajectory_desired = Float64MultiArray()
         # self.trajectory_desired.data = x_d
