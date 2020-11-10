@@ -75,11 +75,9 @@ class image_converter:
 
         def pixelTometer(self,image1, image2):
             circle1pos = detect_blue(self,image1, image2)
-            z1 = 800 - circle1pos[3]
-            circle2pos = detect_yellow(self,image1, image2)
-            z2 = 800 - circle2pos[3]
-            distance = z1 - z2
-            return 2.5 / distance
+            circle2pos = detect_green(self,image1, image2)
+            distance = np.sum((circle1pos - circle2pos) ** 2)
+            return 3.5 / np.sqrt(distance)
 
         def detect_blue(self,image1, image2):
             mask1 = cv2.inRange(image1, (100, 0, 0), (255, 0, 0))
@@ -144,90 +142,65 @@ class image_converter:
             ct = int(M2['m01'] / M2['m00'])
             return np.array([cx, cy, cz, ct])
 
-        def initialize_detect_shape_var(template):
+        def detect_shape(self,mask, template):
             startX = []
             startY = []
             endX = []
             endY = []
             w, h = template.shape[::-1]
-
-            return startX, startY, endX, endY, w, h
-
-        def get_resized_ratio(mask, scale):
-            found = None
-            resized = imutils.resize(mask, width = int(mask.shape[1] * scale))
-            r = mask.shape[1]/float(resized.shape[1])
-            return resized, r, found
-
-        def get_maxVal_maxLoc(resized, template):
-            res = cv2.matchTemplate(resized,template,cv2.TM_CCOEFF_NORMED)
-            (_, maxVal, _, maxLoc) = cv2.minMaxLoc(res)
-            return maxVal, maxLoc
-
-        def append_X_Y(startX, startY, endX, endY,maxLoc, r, w, h):
-            startX.append(int(maxLoc[0] * r))
-            startY.append(int(maxLoc[1] * r))
-            endX.append(int((maxLoc[0] + w) * r))
-            endY.append(int((maxLoc[1] + h) * r))
-
-            return startX, startY, endX, endY
-
-        def detect_shape(self,mask, template):
-            startX, startY, endX, endY, w, h = initialize_detect_shape_var(template)
             for scale in np.linspace(0.79, 1.0, 5)[::-1]:
-                resized, r, found = get_resized_ratio(mask, scale)
-
+                found = None
+                resized = imutils.resize(mask, width = int(mask.shape[1] * scale))
+                r = mask.shape[1]/float(resized.shape[1])
                 if resized.shape[0] < h or resized.shape[1] < w:
                     break
 
-                maxVal, maxLoc = get_maxVal_maxLoc(resized, template)
+                res = cv2.matchTemplate(resized,template,cv2.TM_CCOEFF_NORMED)
+                loc = np.where( res > threshold)
+                (_, maxVal, _, maxLoc) = cv2.minMaxLoc(res)
 
                 if found is None or maxVal > found[0]:
                     found = (maxVal, maxLoc, r)
 
-                startX, startY, endX, endY = append_X_Y(startX, startY, endX, endY, maxLoc, r, w, h)
+                    #(startX, startY) = (int(maxLoc[0] * r), int(maxLoc[1] * r))
+                    #(endX, endY) = (int((maxLoc[0] + w) * r), int((maxLoc[1] + h) * r))
+                    # draw a bounding box around the detected result and display the image
+
+
+                startX.append(int(maxLoc[0] * r))
+                startY.append(int(maxLoc[1] * r))
+                endX.append(int((maxLoc[0] + w) * r))
+                endY.append(int((maxLoc[1] + h) * r))
 
             centerX = (statistics.mean(endX) + statistics.mean(startX))/2
             centerY = (statistics.mean(endY) + statistics.mean(startY))/2
 
             return centerX, centerY
 
-        def apply_mask_target(image):
-            hsv_convert = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-            mask = cv2.inRange(hsv_convert, (10, 202, 0), (27, 255, 255))
-            kernel = np.ones((2, 2), np.uint8)
-            mask = cv2.dilate(mask, kernel, iterations=1)
-            return mask
-
-        def get_target_location(self, centerX, centerY, centerZ):
-            base_location = detect_yellow(self, self.image1, self.image2)
-            base_location[2] = 800 - base_location[2]
-            centerZ = 800 - centerZ
-            target_location = (centerX - base_location[0], centerY - base_location[1], centerZ - base_location[2])
-            target_location = np.asarray(target_location)
-            return target_location
-
-
-
         def flying_object_location(self,image1,image2, template, threshold):
-            mask1 = apply_mask_target(image1)
-            mask2 = apply_mask_target(image2)
+            hsv_convert_1 = cv2.cvtColor(image1, cv2.COLOR_BGR2HSV)
+            hsv_convert_2 = cv2.cvtColor(image2, cv2.COLOR_BGR2HSV)
+            mask1 = cv2.inRange(hsv_convert_1, (10, 202, 0), (27, 255, 255))
+            mask2 = cv2.inRange(hsv_convert_2, (10, 202, 0), (27, 255, 255))
+            kernel = np.ones((2, 2), np.uint8)
+            mask1 = cv2.dilate(mask1, kernel, iterations=1)
+            mask2 = cv2.dilate(mask2, kernel, iterations=1)
 
             centerY, centerZ1 = detect_shape(self, mask1, template)
             centerX, centerZ2 = detect_shape(self, mask2, template)
 
             p = pixelTometer(self, image1, image2)
 
+            loc=np.array([0,0,0,0])
+            #TODO: investigate
+            loc_final=p*detect_yellow(self,self.image1,self.image2)-loc
+
             image1 = cv2.circle(image1, (int(centerY), int(centerZ1)), radius=2, color=(255, 255, 255), thickness=-1)
             image2 = cv2.circle(image2, (int(centerX), int(centerZ2)), radius=2, color=(255, 255, 255), thickness=-1)
 
             cv2.imshow("image1", image1)
             cv2.imshow("image2", image2)
-
-            target_location = get_target_location(self, centerX, centerY, centerZ1)
-            target_location_meters = target_location*p
-
-            return target_location_meters
+            return
 
 
 #------------------------------------------------------------------------------------------
@@ -262,12 +235,12 @@ class image_converter:
         self.joint4.data = 0
 
         # # Publishing the desired trajectory on a topic named trajectory(for lab 3)
+        threshold = 0.4
+
         template = cv2.imread("/home/boniface/catkin_ws/src/ivr_assignment/src/images/cropped.png",0)
 
 
         x_d =flying_object_location(self,self.image1,self.image2, template, 0.8)   # getting the desired trajectory
-        print(x_d)
-
 
         # self.trajectory_desired = Float64MultiArray()
         # self.trajectory_desired.data = x_d

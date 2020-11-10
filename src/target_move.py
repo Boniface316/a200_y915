@@ -48,6 +48,9 @@ def move():
     robot_joint6_pub.publish(joint6)
     rate.sleep()
 
+    target_location = (joint1.data, joint2.data, joint3.data)
+    print(np.asarray(target_location))
+
 
 
 # run the code if the node is called
