@@ -1,0 +1,13 @@
+
+
+RQT:
+
+From terminal execute rqt
+
+
+go to visualization and plot
+
+
+write on the top text box actual_target_trajectory/data[0] that is for x-position of x_a and press the plus sign
+
+for the vision put vision_target_trajectory/data[0] and that is for x of the x_d
