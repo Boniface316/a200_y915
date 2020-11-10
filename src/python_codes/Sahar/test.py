@@ -5,13 +5,13 @@ import sys
 import rospy
 import cv2
 import math
+import utils2
 import numpy as np
 from std_msgs.msg import String
 from sensor_msgs.msg import Image
 from std_msgs.msg import Float64MultiArray, Float64
 from cv_bridge import CvBridge, CvBridgeError
 from scipy.spatial import distance as dist
-import pandas as pd
 
 
 class image_converter:
@@ -26,13 +26,13 @@ class image_converter:
         #Initialize  a publisher to send joints angular posiion toa topic called joints_pos
         self.joints_pub=rospy.Publisher("joints_pos",Float64MultiArray,queue_size=10)
         #initialize a publisher for the robot end effector
-        #self.end_effector_pub=rospy.Publisher("end_effector_prediction",Float64MultiArray,queue_size=10)
+        self.vision_end_effector_pub=rospy.Publisher("vision_end_effector",Float64MultiArray,queue_size=10)
+        self.fk_end_effector_pub = rospy.Publisher("fk_end_effector", Float64MultiArray, queue_size=10)
         #initialize a publisher for the four angles
         self.robot_joint1_pub = rospy.Publisher("/robot/joint1_position_controller/command", Float64, queue_size=10)
         self.robot_joint2_pub = rospy.Publisher("/robot/joint2_position_controller/command", Float64, queue_size=10)
         self.robot_joint3_pub = rospy.Publisher("/robot/joint3_position_controller/command", Float64, queue_size=10)
         self.robot_joint4_pub = rospy.Publisher("/robot/joint4_position_controller/command", Float64, queue_size=10)
-
         #Initialize the publisher for t target
         self.target_x_pub = rospy.Publisher("/target/x_position_controller/command", Float64, queue_size=10)
         self.target_y_pub = rospy.Publisher("/target/y_position_controller/command", Float64, queue_size=10)
@@ -41,7 +41,10 @@ class image_converter:
         self.image_sub1 = rospy.Subscriber("/camera1/robot/image_raw", Image, self.callback1)
         self.image_sub2 = rospy.Subscriber("/camera2/robot/image_raw", Image, self.callback2)
         #initialize a publisher to send desired trajectory
-        #self.trajectory_pub = rospy.Publisher("trajectory", Float64MultiArray, queue_size=10)
+        self.trajectory_desired_pub = rospy.Publisher("trajectory_desired", Float64MultiArray, queue_size=10)
+        self.actual_target_pos_pub = rospy.Publisher("actual_target_position", Float64MultiArray, queue_size=10)
+
+
         self.time_trajectory = rospy.get_time()
 
 
@@ -136,44 +139,14 @@ class image_converter:
 
         def pixelTometer(self,image1, image2):
             circle1pos = detect_blue(self,image1, image2)
-            circle2pos = detect_green(self,image1, image2)
-            distance = np.sum((circle1pos - circle2pos) ** 2)
-            return 3.5 / np.sqrt(distance)
-
-        def get_centroids(self,image1,image2):
-            red_posn = detect_red(self,image1,image2)
-            blue_posn = detect_blue(self,image1,image2)
-            yellow_posn = detect_yellow(self,image1, image2)
-            green_posn = detect_green(self,image1, image2)
-            return yellow_posn, blue_posn, green_posn, red_posn
-
-        def create_center_positions(yellow_posn, blue_posn, green_posn, red_posn):
-            colours_order = ["yellow", "blue", "green", "red"]
-            center_position = dict.fromkeys(colours_order)
-            center_position["yellow"] = yellow_posn
-            center_position["blue"] = blue_posn
-            center_position["green"] = green_posn
-            center_position["red"] = red_posn
-            return center_position
-
-        def change_origin(centroids_positions, joint_color):
-            centroids_posn_pd = pd.DataFrame.from_dict(centroids_positions, orient='index', columns=['X', 'Y', 'Z', 'Z2'])
-            centroids_posn_pd = centroids_posn_pd.drop(columns = "Z2")
-            centroids_posn_pd['Z'] = 800 - centroids_posn_pd['Z']
-            centroids_posn_pd['X'] = centroids_posn_pd['X'] - centroids_posn_pd.loc[joint_color, 'X']
-            centroids_posn_pd['Y'] = centroids_posn_pd['Y'] - centroids_posn_pd.loc[joint_color, 'Y']
-            centroids_posn_pd['Z'] = centroids_posn_pd['Z'] - centroids_posn_pd.loc[joint_color, 'Z']
-            return centroids_posn_pd
-
-        def create_xyz_table(self,image1, image2, origin):
-            yellow_posn, blue_posn, green_posn, red_posn  = get_centroids(self,image1, image2)
-            center_position = create_center_positions(yellow_posn, blue_posn, green_posn, red_posn)
-            xyz_table = change_origin(center_position, origin)
-            return xyz_table
-
+            z1 = 800 - circle1pos[3]
+            circle2pos = detect_yellow(self,image1, image2)
+            z2 = 800 - circle2pos[3]
+            distance = z1 - z2
+            return 2.5 / distance
 
         def angle_detection_blob(self,image1, image2):
-            xyz_blob = create_xyz_table(self,self.image1, self.image2, "yellow")
+            xyz_blob = utils2.create_xyz_table(self.image1, self.image2, "yellow")
 
             green_posn = xyz_blob.loc["green",]
             blue_posn = xyz_blob.loc["blue",]
@@ -183,18 +156,10 @@ class image_converter:
             ja2_blob = np.arctan2((blue_posn[1] - green_posn[1]), -(blue_posn[2] - green_posn[2]))
             #ja2_blob = utils2.angle_normalization(ja2_blob)
             ja3_blob = np.arctan2((blue_posn[0] - green_posn[0]), (blue_posn[2] - green_posn[2]))
-            ja3_blob = angle_normalization(ja3_blob)
-            ja4_blob = np.arctan2(green_posn[1] - red_posn[1], -(green_posn[2] - red_posn[2]))
-            ja4_blob = angle_normalization(ja4_blob) - ja2_blob
+            #ja3_blob = utils2.angle_normalization(ja3_blob)
+            ja4_blob = np.arctan2(green_posn[1] - red_posn[1], (green_posn[2] - red_posn[2]))-ja2_blob
+            #ja4_blob = utils2.angle_normalization(ja4_blob) - ja2_blob
             return np.array([ja1_blob, ja2_blob, ja3_blob, ja4_blob])
-
-        def angle_normalization(angle):
-            angle=angle%np.pi
-            if (angle > np.pi/2):
-                angle=(angle-np.pi/2)
-            elif(angle <= np.pi/2):
-                angle=(angle+np.pi/2)
-            return angle
 
         def angle_trajectory(self):
             curr_time = np.array([rospy.get_time() - self.time_trajectory])
@@ -209,48 +174,116 @@ class image_converter:
             x_d = float((2.5 * np.cos(curr_time * np.pi / 15))+0.5)
             y_d = float(2.5 * np.sin(curr_time * np.pi / 15))
             z_d = float((1 * np.sin(curr_time * np.pi / 15))+7.0)
-            return (x_d,y_d,z_d)
+            m = np.array([[1, 0, 0], [0, -1, 0], [0, 0, 1]])
+            return np.array([x_d,y_d,z_d])
 
         def EE_by_DH(self):
+            m=np.array([[0,1,0,0],[1,0,0,0],[0,0,-1,0],[0,0,0,1]])
             ja1, ja2, ja3, ja4 = angle_trajectory(self)
-            T1 = np.matrix(
+            T1 = np.array(
                 [[np.cos(ja1), 0, np.sin(ja1), 0], [np.sin(ja1), 0, -np.cos(ja1), 0], [0, 1, 0, 2.5], [0, 0, 0, 1]])
-            T2 = np.matrix(
+            T2 = np.array(
                 [[np.cos(ja2), 0, np.sin(ja2), 0], [np.sin(ja2), 0, -np.cos(ja2), 0], [0, 1, 0, 0], [0, 0, 0, 1]])
-            T3 = np.matrix(
+            Tn=np.array([[0,-1,0,0],[1,0,0,0],[0,0,1,0],[0,0,0,1]])
+            T3 = np.array(
                 [[np.cos(ja3), 0, -np.sin(ja3), 3.5 * np.cos(ja3)], [np.sin(ja3), 0, np.cos(ja3), 3.5 * np.sin(ja3)],
                  [0, -1, 0, 0], [0, 0, 0, 1]])
-            T4 = np.matrix(
+            T4 = np.array(
                 [[np.cos(ja4), -np.sin(ja4), 0, 3.0 * np.cos(ja4)], [np.sin(ja4), np.cos(ja4), 0, 3.0 * np.sin(ja4)],
                  [0, 0, 1, 0], [0, 0, 0, 1]])
-            E1 = T1.dot(T2)
+            E1 = T1.dot(Tn)
+            E1=E1.dot(T2)
             E2 = E1.dot(T3)
             EE = E2.dot(T4)
+            #EE=EE.dot(m)
+            # ee=EE[0:3,3]
+            # ee=ee.reshape(1,3)
             return EE
 
-        def calculate_forward_kinematics(self):
+        def calculate_forward_kinematics(self,image1,image2):
             ja1, ja2, ja3, ja4 = angle_trajectory(self)
-            end_effector = np.array([3*np.cos(ja1)*np.cos(ja2)*np.cos(ja3)*np.cos(ja4)
-              +3*np.sin(ja1)*np.sin(ja3)*np.cos(ja4)
-              -3*np.cos(ja1)*np.sin(ja2)*np.sin(ja4)
-              +3.5*np.cos(ja1)*np.cos(ja2)*np.cos(ja3)
-              +3.5*np.sin(ja1)*np.sin(ja3),
+            end_effector = np.array([3*np.cos(ja1+1.5708)*np.cos(ja2+1.5708)*np.cos(ja3)*np.cos(ja4)
+              +3*np.sin(ja1+1.5708)*np.sin(ja3)*np.cos(ja4)
+              -3*np.cos(ja1+1.5708)*np.sin(ja2+1.5708)*np.sin(ja4)
+              +3.5*np.cos(ja1+1.5708)*np.cos(ja2+1.5708)*np.cos(ja3)
+              +3.5*np.sin(ja1+1.5708)*np.sin(ja3),
 
-             3*np.sin(ja1)*np.cos(ja2)*np.cos(ja3)*np.cos(ja4)
-              -3*np.cos(ja1)*np.sin(ja3)*np.cos(ja4)
-              -3*np.sin(ja1)*np.sin(ja2)*np.sin(ja4)
-            +3.5*np.sin(ja1)*np.cos(ja2)*np.cos(ja3)
-            -3.5*np.cos(ja1)*np.sin(ja3),
+             3*np.sin(ja1+1.5708)*np.cos(ja2+1.5708)*np.cos(ja3)*np.cos(ja4)
+              -3*np.cos(ja1+1.5708)*np.sin(ja3)*np.cos(ja4)
+              -3*np.sin(ja1+1.5708)*np.sin(ja2+1.5708)*np.sin(ja4)
+            +3.5*np.sin(ja1+1.5708)*np.cos(ja2+1.5708)*np.cos(ja3)
+            -3.5*np.cos(ja1+1.5708)*np.sin(ja3),
 
-                 3 * np.sin(ja2) * np.cos(ja3) * np.cos(ja4)
-                 +3*np.cos(ja2)*np.sin(ja4)+3.5*np.sin(ja2)*np.cos(ja3)+2.5
+                 3 * np.sin(ja2+1.5708) * np.cos(ja3) * np.cos(ja4)
+                 +3*np.cos(ja2+1.5708)*np.sin(ja4)+3.5*np.sin(ja2+1.5708)*np.cos(ja3)+2.5
              ])
-            return end_effector
+            m=np.array([[0,1,0],[-1,0,0],[0,0,1]])
 
-        def end_effector_position(self,image1, image2):
-            p = pixelTometer(self,image1, image2)
-            cx,cy,cz,ct= p * ((detect_yellow(self,image1, image2) - detect_red(self,image1, image2)))
-            return np.array([cx,cy,cz])
+            return m.dot(end_effector)
+
+        def end_effector_position(self, image1, image2):
+            p = pixelTometer(self, image1, image2)
+            m = np.array([[0, -1, 0], [1, 0, 0], [0, 0, 1]])
+            cx, cy, cz, ct = p * (detect_yellow(self, image1, image2) - detect_red(self, image1, image2))
+            return m.dot(np.array([cx, cy, cz]))
+
+        def calculate_jacobian(self):
+            ja1,ja2,ja3,ja4=angle_detection_blob(self,self.image1,self.image2)
+
+            jacobian=np.array([[-3*np.sin(ja1)*np.cos(ja2)*np.cos(ja3)*np.cos(ja4)
+                               -3.5*np.sin(ja1)*np.cos(ja2)*np.cos(ja3)
+                               +3*np.cos(ja4)*np.sin(ja3)*np.cos(ja3)
+                               +3.5*np.sin(ja3)*np.cos(ja1)
+                               +3*np.sin(ja4)*np.sin(ja1)*np.sin(ja2),
+
+                               -3*np.cos(ja1)*np.sin(ja2)*np.cos(ja3)*np.cos(ja4)
+                               -3.5*np.cos(ja1)*np.sin(ja2)*np.cos(ja3)
+                               -3*np.sin(ja4)*np.cos(ja1)*np.cos(ja2),
+
+                               -3*np.cos(ja1)*np.cos(ja2)*np.sin(ja3)*np.cos(ja4)
+                               -3.5*np.sin(ja3)*np.cos(ja1)*np.cos(ja2)
+                               +3*np.cos(ja4)*np.cos(ja3)*np.sin(ja1)
+                               +3.5*np.cos(ja3)*np.sin(ja1),
+
+                               -3*np.cos(ja1)*np.cos(ja2)*np.cos(ja3)*np.sin(ja4)
+                               -3*np.sin(ja4)*np.sin(ja3)*np.sin(ja1)
+                              -3*np.cos(ja4)*np.cos(ja1)*np.sin(ja2)
+                               ],
+                              [
+
+                                3*np.cos(ja3)*np.cos(ja4)*np.cos(ja1)*np.cos(ja2)
+                               +3.5*np.cos(ja3)*np.cos(ja1)*np.cos(ja2)
+                                +3*np.cos(ja4)*np.sin(ja3)*np.sin(ja1)
+                                +3.5*np.sin(ja3)*np.sin(ja1),
+
+                                -3*np.cos(ja3)*np.cos(ja4)*np.sin(ja1)*np.sin(ja2)
+                                -3.5*np.cos(ja3)*np.sin(ja1)*np.sin(ja2)
+                                -3*np.sin(ja4)*np.sin(ja1)*np.cos(ja2),
+
+                                -3*np.sin(ja3)*np.cos(ja4)*np.sin(ja1)*np.cos(ja2)
+                                -3.5*np.sin(ja3)*np.sin(ja1)*np.cos(ja2)
+                                -3*np.cos(ja4)*np.cos(ja3)*np.cos(ja1)
+                                -3.5*np.cos(ja3)*np.cos(ja1),
+
+                                -3*np.cos(ja3)*np.sin(ja4)*np.sin(ja1)*np.cos(ja2)
+                                +3*np.sin(ja4)*np.sin(ja3)*np.cos(ja1)
+                                -3*np.cos(ja4)*np.sin(ja1)*np.sin(ja2)
+                              ],
+                              [ 0,
+
+                                 3*np.cos(ja3)*np.cos(ja4)*np.cos(ja2)
+                                 +3.5*np.cos(ja3)*np.cos(ja2)
+                                 -3*np.sin(ja4)*np.sin(ja2),
+
+                                 -3*np.sin(ja3)*np.cos(ja4)*np.sin(ja2)
+                                 -3.5*np.sin(ja3)*np.sin(ja2),
+
+                                  -3*np.cos(ja3)*np.sin(ja4)*np.sin(ja2)
+                                  +3*np.cos(ja4)*np.cos(ja2)]
+
+            ])
+            return jacobian
+
 
         def detect_shape(self,contour):
             shape = "Unknown"
@@ -300,10 +333,10 @@ class image_converter:
             cz1_=float(cz1)*p
             cz2_=float(cz2)*p
             loc=np.array([cx_,cy_,cz1_,cz2_])
-            loc_final=p*detect_yellow(self,self.image1,self.image2)-loc
-            image = cv2.circle(image2, (int(cx), int(cz2)), radius=2, color=(255, 255, 255), thickness=-1)
-            cv2.imshow("image", image2)
-            return shape_new1,shape_new2,loc_final
+            x,y,z,t=p*((detect_yellow(self,self.image1,self.image2)-loc))
+            # image = cv2.circle(image2, (int(cx), int(cz2)), radius=2, color=(255, 255, 255), thickness=-1)
+            # cv2.imshow("image", image)
+            return np.array([x,y,z])
 
 
 #------------------------------------------------------------------------------------------
@@ -314,14 +347,13 @@ class image_converter:
             cur_time = rospy.get_time()
             dt = cur_time - self.time_previous_step2
             self.time_previous_step2 = cur_time
-            q = angle_detection_blob(self,image1,image2)  # estimate initial value of joints'
-            J_inv = np.linalg.pinv(calculate_jacobian(self,image1,image2))  # calculating the psudeo inverse of Jacobian
+            q =  angle_detection_blob(self,image1,image2)# estimate initial value of joints'
+            J_inv = np.linalg.pinv(calculate_jacobian(self))  # calculating the psudeo inverse of Jacobian
             # desired trajectory
-            pos_d = flying_object_location(self,image1,image2)
+            pos_d = actual_target_position(self)
             # estimate derivative of desired trajectory
             self.error_d = (pos_d - self.error) / dt
             self.error = pos_d
-
             q_d = q + (dt * np.dot(J_inv, self.error_d.transpose()))  # desired joint angles to follow the trajectory
             return q_d
 
@@ -337,68 +369,88 @@ class image_converter:
             # robot end-effector position
             pos = end_effector_position(self,image1,image2)
             # desired trajectory
-            pos_d = flying_object_location(self,image1,image2)
+            pos_d = actual_target_position(self)
             # estimate derivative of error
             self.error_d = ((pos_d - pos) - self.error) / dt
             # estimate error
             self.error = pos_d - pos
             q = angle_detection_blob(self,image1,image2)  # estimate initial value of joints'
-            J_inv = np.linalg.pinv(calculate_jacobian(self,image1,image2))  # calculating the psudeo inverse of Jacobian
+            J_inv = np.linalg.pinv(calculate_jacobian(self))  # calculating the psudeo inverse of Jacobian
             dq_d = np.dot(J_inv, (np.dot(K_d, self.error_d.transpose()) + np.dot(K_p,
                                                                                  self.error.transpose())))  # control input (angular velocity of joints)
             q_d = q + (dt * dq_d)  # control input (angular position of joints)
             return q_d
 
-
-
-
         cv2.waitKey(1)
         # Publish the results
         # change te value of self.joint.data to your estimated value from thew images once you have finalized the code
-        self.joints = Float64MultiArray()
-        self.joints.data = angle_trajectory(self)
+
         #
         # publish the estimated position of robot end-effector (for lab 3)
 
-        x_e = calculate_forward_kinematics(self)
-        # x_e_image=end_effector_position(self, self.image1,self.image2)
-        # self.end_effector = Float64MultiArray()
-        # self.end_effector.data = x_e_image
 
         # send control commands to joints (for lab 3)
         #q_d = control_closed(self, self.image1,self.image2)
-        # q_d=control_open(self,self.image1,self.image2)
-        # print("The joints after q_d",q_d)
-        ja1,ja2,ja3,ja4=angle_trajectory(self)
-        print("Angles trajectory",angle_trajectory(self))
-        print ("Angles by vision",angle_detection_blob(self,self.image1,self.image2))
+        q_d=control_open(self,self.image1,self.image2)
 
-        print("---------------------------------------------------------------------------")
-        print("Location of the sphere",flying_object_location(self,self.image1,self.image2))
-        print ("Actual Target Position",actual_target_position(self))
-        # print (calculate_forward_kinematics(self),EE_by_DH(self))
+
+        # print("Control angles",q_d)
+        # print("Trajectory angles",angle_trajectory(self))
+        # print("Blob angles",angle_detection_blob(self,self.image1,self.image2))
+        print ("End eff",end_effector_position(self,self.image1,self.image2))
+        print("FK pos",calculate_forward_kinematics(self,self.image1,self.image2))
+        print(EE_by_DH(self))
+        print("\n")
+
+        self.joints = Float64MultiArray()
+        self.joints.data = angle_trajectory(self)
+
+        ja1,ja2,ja3,ja4=angle_trajectory(self)
         self.joint1 = Float64()
         self.joint1.data = ja1
         self.joint2 = Float64()
         self.joint2.data = ja2
         self.joint3 = Float64()
-        self.joint3.data = ja3
+        self.joint3.data =ja3
         self.joint4 = Float64()
         self.joint4.data = ja4
 
+
+        fk_end_effector = calculate_forward_kinematics(self, self.image1, self.image2)
+        vision_end_effector = end_effector_position(self, self.image1, self.image2)
+        self.vision_EF = Float64MultiArray()
+        self.vision_EF.data = vision_end_effector
+        self.fk_EF=Float64MultiArray()
+        self.fk_EF.data=fk_end_effector
+
         # # Publishing the desired trajectory on a topic named trajectory(for lab 3)
-        #x_d =flying_object_location(self,self.image1,self.image2)   # getting the desired trajectory
-        # self.trajectory_desired = Float64MultiArray()
-        # self.trajectory_desired.data = x_d
+        x_d =flying_object_location(self,self.image1,self.image2)   # getting the desired trajectory
+        self.trajectory_desired = Float64MultiArray()
+        self.trajectory_desired.data = x_d
+
+        self.target_actual=Float64MultiArray()
+        x_a=actual_target_position(self)
+        self.target_actual.data=x_a
 
         try:
             self.image_pub1.publish(self.bridge.cv2_to_imgmsg(self.image1, "bgr8"))
             self.image_pub2.publish(self.bridge.cv2_to_imgmsg(self.image2, "bgr8"))
+
+            self.vision_end_effector_pub.publish((self.vision_EF))
+            self.fk_end_effector_pub.publish((self.fk_EF))
+
+            self.trajectory_desired_pub.publish(self.trajectory_desired)
+            self.actual_target_pos_pub.publish(self.target_actual)
+
             self.joints_pub.publish(self.joints)
             self.robot_joint1_pub.publish(self.joint1)
             self.robot_joint2_pub.publish(self.joint2)
             self.robot_joint3_pub.publish(self.joint3)
             self.robot_joint4_pub.publish(self.joint4)
+
+
+
+
         except CvBridgeError as e:
             print(e)
 
@@ -417,3 +469,4 @@ def main(args):
 # run the code if the node is called
 if __name__ == '__main__':
     main(sys.argv)
+
