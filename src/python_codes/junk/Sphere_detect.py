@@ -207,8 +207,6 @@ class image_converter:
             target_location = np.asarray(target_location)
             return target_location
 
-
-
         def flying_object_location(self,image1,image2, template, threshold):
             mask1 = apply_mask_target(image1)
             mask2 = apply_mask_target(image2)

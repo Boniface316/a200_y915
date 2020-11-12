@@ -195,7 +195,8 @@ class image_converter:
 
         def apply_mask_target(image):
             hsv_convert = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-            mask = cv2.inRange(hsv_convert, (16, 69, 127), (19, 155, 213))
+            #Change this value to match yours
+            mask = cv2.inRange(hsv_convert, (10, 202, 0), (27, 255, 255))
             kernel = np.ones((2, 2), np.uint8)
             mask = cv2.dilate(mask, kernel, iterations=1)
             return mask
@@ -222,8 +223,8 @@ class image_converter:
             image1 = cv2.circle(image1, (int(centerY), int(centerZ1)), radius=2, color=(255, 255, 255), thickness=-1)
             image2 = cv2.circle(image2, (int(centerX), int(centerZ2)), radius=2, color=(255, 255, 255), thickness=-1)
 
-            cv2.imshow("image1", image1)
-            cv2.imshow("image2", image2)
+            #cv2.imshow("image1", image1)
+            #cv2.imshow("image2", image2)
 
             target_location = get_target_location(self, centerX, centerY, centerZ1)
             target_location_meters = target_location*p
@@ -241,26 +242,8 @@ class image_converter:
 
 #------------------------------------------------------------------------------------------
 
-
-
         cv2.waitKey(1)
-        # Publish the results
-        # change te value of self.joint.data to your estimated value from thew images once you have finalized the code
 
-        #
-        # publish the estimated position of robot end-effector (for lab 3)
-
-
-        # x_e_image=end_effector_position(self, self.image1,self.image2)
-        # self.end_effector = Float64MultiArray()
-        # self.end_effector.data = x_e_image
-
-        # send control commands to joints (for lab 3)
-        #q_d = control_closed(self, self.image1,self.image2)
-        # q_d=control_open(self,self.image1,self.image2)
-        # print("The joints after q_d",q_d)
-
-        # print (calculate_forward_kinematics(self),EE_by_DH(self))
         self.joint1 = Float64()
         self.joint1.data = 0
         self.joint2 = Float64()
@@ -270,13 +253,11 @@ class image_converter:
         self.joint4 = Float64()
         self.joint4.data = 0
 
-        # # Publishing the desired trajectory on a topic named trajectory(for lab 3)
-
-
         template = cv2.imread("cropped.png",0)
+
         x_a=actual_target_position(self)
         x_d =flying_object_location(self,self.image1,self.image2, template, 0.8)   # getting the desired trajectory
-        print(x_d)
+        #print(x_d)
 
 
         self.actual_target= Float64MultiArray()
