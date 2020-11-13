@@ -16,7 +16,7 @@ cv2.createTrackbar("HS", "Tracking", 255, 255, nothing)
 cv2.createTrackbar("HV", "Tracking", 255, 255, nothing)
 
 while True:
-    frame =cv2.imread("/home/boniface/catkin_ws/src/ivr_assignment/src/images/target_only/c1_bottom_left.png")
+    frame =cv2.imread("/home/boniface/catkin_ws/src/ivr_assignment/src/tools/image_copy1.png")
     hsv=cv2.cvtColor(frame,cv2.COLOR_BGR2HSV)
 
     l_h=cv2.getTrackbarPos("LH","Tracking")
