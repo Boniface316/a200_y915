@@ -72,7 +72,7 @@ class image_converter:
 
         #Blob detection starts here-------------------------------------------------------
 
-        def detect_yellow(self,image1, image2):
+        def detect_yellow(self,image1,image2):
             mask1 = cv2.inRange(image1, (0, 100, 100), (0, 255, 255))
             kernel = np.ones((5, 5), np.uint8)
             mask1 = cv2.dilate(mask1, kernel, iterations=3)
@@ -85,6 +85,24 @@ class image_converter:
             cz = int(M1['m01'] / M1['m00'])
             cx = int(M2['m10'] / M2['m00'])
             ct = int(M2['m01'] / M2['m00'])
+            return np.array([cx, cy, cz, ct])
+
+
+
+        def detect_blue(self,image1,image2):
+            mask1 = cv2.inRange(image1, (100, 0, 0), (255, 0, 0))
+            kernel = np.ones((5, 5), np.uint8)
+            mask1 = cv2.dilate(mask1, kernel, iterations=3)
+            M1 = cv2.moments(mask1)
+
+            mask2 = cv2.inRange(image2, (100, 0, 0), (255, 0, 0))
+            mask2 = cv2.dilate(mask2, kernel, iterations=3)
+            M2 = cv2.moments(mask2)
+            cy = int(M1['m10'] / M1['m00'])
+            cz = int(M1['m01'] / M1['m00'])
+            cx = int(M2['m10'] / M2['m00'])
+            ct = int(M2['m01'] / M2['m00'])
+
             return np.array([cx, cy, cz, ct])
 
         def detect_red(self,image1, image2):
@@ -102,21 +120,6 @@ class image_converter:
             ct = int(M2['m01'] / M2['m00'])
             return np.array([cx, cy, cz, ct])
 
-        def detect_blue(self,image1, image2):
-            mask1 = cv2.inRange(image1, (100, 0, 0), (255, 0, 0))
-            kernel = np.ones((5, 5), np.uint8)
-            mask1 = cv2.dilate(mask1, kernel, iterations=3)
-            M1 = cv2.moments(mask1)
-
-            mask2 = cv2.inRange(image2, (100, 0, 0), (255, 0, 0))
-            mask2 = cv2.dilate(mask2, kernel, iterations=3)
-            M2 = cv2.moments(mask2)
-            cy = int(M1['m10'] / M1['m00'])
-            cz = int(M1['m01'] / M1['m00'])
-            cx = int(M2['m10'] / M2['m00'])
-            ct = int(M2['m01'] / M2['m00'])
-
-            return np.array([cx, cy, cz, ct])
 
         def detect_green(self,image1, image2):
             mask1 = cv2.inRange(image1, (0, 100, 0), (0, 255, 0))
@@ -134,14 +137,63 @@ class image_converter:
 
             return np.array([cx, cy, cz, ct])
 
-        def pixelTometer(self,image1, image2):
-            circle1pos = detect_blue(self,image1, image2)
-            z1 = 800 - circle1pos[3]
-            circle2pos = detect_yellow(self,image1, image2)
-            z2 = 800 - circle2pos[3]
-            distance = z1 - z2
-            print(distance)
-            return 2.5 / distance
+        def detect_blue_contours(image1):
+            image_gau_blur1 = cv2.GaussianBlur(image1, (1, 1), 0)
+            hsv1 = cv2.cvtColor(image_gau_blur1, cv2.COLOR_BGR2HSV)
+            lower_red1 = np.array([70, 0, 0])
+            higher_red1 = np.array([255, 255, 255])
+            red_range1 = cv2.inRange(hsv1, lower_red1, higher_red1)
+            res_red1 = cv2.bitwise_and(image_gau_blur1, image_gau_blur1, mask=red_range1)
+            red_s_gray1 = cv2.cvtColor(res_red1, cv2.COLOR_BGR2GRAY)
+            canny_edge1 = cv2.Canny(red_s_gray1, 30, 70)
+            contours1, hierarchy1 = cv2.findContours(canny_edge1,cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+            return np.array([contours1])
+
+        def detect_yellow_contours(image1):
+            image_gau_blur1 = cv2.GaussianBlur(image1, (1, 1), 0)
+            hsv1 = cv2.cvtColor(image_gau_blur1, cv2.COLOR_BGR2HSV)
+            lower_red1 = np.array([16, 244, 0])
+            higher_red1 = np.array([51, 255, 255])
+            red_range1 = cv2.inRange(hsv1, lower_red1, higher_red1)
+            res_red1 = cv2.bitwise_and(image_gau_blur1, image_gau_blur1, mask=red_range1)
+            red_s_gray1 = cv2.cvtColor(res_red1, cv2.COLOR_BGR2GRAY)
+            canny_edge1 = cv2.Canny(red_s_gray1, 30, 70)
+            contours1, hierarchy1 = cv2.findContours(canny_edge1,cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+            (x1, y1), radius1 = cv2.minEnclosingCircle(contours1[0])
+            cy,cz1 = (int(x1), int(y1))
+
+            return np.array([contours1])
+
+
+        def get_y1_y2(yellow_contours, blue_contours):
+
+            y1 = np.min(yellow_contours, axis = 0)
+            y1 = y1[0][1]
+            y1 = y1[:,1]
+
+            y2 = np.max(blue_contours, axis = 0)
+            y2 = y2[0][1]
+            y2 = y2[:,1]
+
+            return y1, y2
+
+
+        def pixelTometer(image1,image2):
+
+
+
+            yellow_contours = detect_yellow_contours(image2)
+            blue_contours = detect_blue_contours(image2)
+            y2 = detect_blue(self, image1, image2)
+            y2 = y2[3]
+
+            y1, y2 = get_y1_y2(yellow_contours, blue_contours)
+
+            p2m = 2.5/(y1 - y2)
+            #65 is the best number
+
+
+            return p2m
 
 
 
@@ -173,14 +225,47 @@ class image_converter:
             return x_d
 
         def end_effector_position(self, image1, image2):
-            p = pixelTometer(self, image1, image2)
-            m = np.array([[0, -1, 0], [1, 0, 0], [0, 0, 1]])
-            yellow_posn = detect_yellow(self, image1, image2)
+            p = pixelTometer(image1,image2)
+            yellow_posn = detect_yellow(self,image1, image2)
             red_posn = detect_red(self, image1, image2)
             yellow_posn[3] = 800 - yellow_posn[3]
             red_posn[3] = 800 - red_posn[3]
+
             cx, cy, cz1, cz2 = p * (red_posn - yellow_posn)
-            return np.array([cx, cy, cz1, cz2])
+            ee_posn = np.array([cx, cy, cz2])
+            ee_posn = np.round(ee_posn,1)
+            return ee_posn
+
+        def draw_line(self, image1, image2):
+            yellow = detect_yellow(self,image1,image2)
+
+            yellow_x = yellow[0]
+            yellow_z = yellow[3]
+
+            yellow_contours = detect_yellow_contours(image2)
+            blue_contours = detect_blue_contours(image2)
+            y2 = detect_blue(self, image1, image2)
+            y2 = y2[3]
+
+
+
+            y1, _ = get_y1_y2(yellow_contours, blue_contours)
+
+            x1, y1 = yellow_x, int(y1)
+            x2, y2 = yellow_x, int(y2)
+
+
+
+
+            line_thickness = 2
+            cv2.line(image2, (x1, y1), (x2, y2), (0, 255, 0), thickness=line_thickness)
+
+
+            cv2.circle(image2, (int(yellow_x), int(yellow_z)),1, (0, 0, 255), 2)
+
+            cv2.imshow('zx', image2)
+
+
 
 
 
@@ -196,12 +281,16 @@ class image_converter:
         fk_end_effector = get_EE_by_FK(self,0,0,0,np.pi/2 )
         vision_end_effector = end_effector_position(self, self.image1, self.image2)
 
+        print(vision_end_effector)
+
+        draw_line(self, self.image1, self.image2)
+
 #        self.vision_EF = Float64MultiArray()
 #        self.vision_EF.data = vision_end_effector
         self.fk_EF=Float64MultiArray()
         self.fk_EF.data=fk_end_effector
 
-        print(vision_end_effector)
+        #print(vision_end_effector)
 
         # # Publishing the desired trajectory on a topic named trajectory(for lab 3)
 
