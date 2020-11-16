@@ -172,6 +172,8 @@ class image_converter:
             ja4 = float((np.pi / 2) * np.sin((np.pi / 20) * curr_time))
             return np.array([ja1, ja2, ja3, ja4])
 
+        cv2.waitKey(1)
+
         self.joints = Float64MultiArray()
         self.joints.data = detect_angles_blob(self,self.image1,self.image2)
         ja1,ja2,ja3,ja4=angle_trajectory(self)

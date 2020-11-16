@@ -221,6 +221,8 @@ class image_converter:
 
             return target_location_meters
 
+        cv2.waitKey(1)
+
 
 
         # # Publishing the desired trajectory on a topic named trajectory(for lab 3)
