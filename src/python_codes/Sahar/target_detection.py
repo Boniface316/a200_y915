@@ -192,7 +192,7 @@ class image_converter:
 
         def apply_mask_target(image):
             hsv_convert = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-            mask = cv2.inRange(hsv_convert, (16, 69, 127), (19, 155, 213))
+            mask = cv2.inRange(hsv_convert, (10, 202, 0), (27, 255, 255))
             kernel = np.ones((2, 2), np.uint8)
             mask = cv2.dilate(mask, kernel, iterations=1)
             return mask
