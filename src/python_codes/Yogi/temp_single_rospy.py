@@ -140,6 +140,7 @@ class image_converter:
             cz = int(M1['m01'] / M1['m00'])
             cx = int(M2['m10'] / M2['m00'])
             ct = int(M2['m01'] / M2['m00'])
+
             return np.array([cx, cy, cz, ct])
 
         def detect_shape(self,mask, template):
@@ -189,6 +190,8 @@ class image_converter:
             centerY, centerZ1 = detect_shape(self, mask1, template)
             centerX, centerZ2 = detect_shape(self, mask2, template)
 
+            print(centerX, centerY, centerZ1, centerZ1)
+
             p = pixelTometer(self, image1, image2)
 
             loc=np.array([0,0,0,0])
@@ -200,7 +203,7 @@ class image_converter:
 
             cv2.imshow("image1", image1)
             cv2.imshow("image2", image2)
-            return
+            return loc_final
 
 
 #------------------------------------------------------------------------------------------
@@ -237,10 +240,11 @@ class image_converter:
         # # Publishing the desired trajectory on a topic named trajectory(for lab 3)
         threshold = 0.4
 
-        template = cv2.imread("/home/boniface/catkin_ws/src/ivr_assignment/src/images/cropped.png",0)
+        template = cv2.imread("/home/boniface/catkin_ws/src/ivr_assignment/src/python_codes/combined/cropped.png",0)
 
 
         x_d =flying_object_location(self,self.image1,self.image2, template, 0.8)   # getting the desired trajectory
+
 
         # self.trajectory_desired = Float64MultiArray()
         # self.trajectory_desired.data = x_d

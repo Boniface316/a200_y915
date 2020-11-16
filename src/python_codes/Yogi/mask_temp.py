@@ -13,8 +13,6 @@ def detect_blue_contours(image1):
     red_s_gray1 = cv2.cvtColor(res_red1, cv2.COLOR_BGR2GRAY)
     canny_edge1 = cv2.Canny(red_s_gray1, 30, 70)
     contours1, hierarchy1 = cv2.findContours(canny_edge1,cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-    cv2.drawContours(image1, contours1[0], -1, (255,255,255), 2)
-    cv2.imshow("mask",red_range1)
     return np.array([contours1])
 
 def detect_yellow_contours(image1):
@@ -91,7 +89,9 @@ def pixelTometer(image1):
 image1 = cv2.imread("/home/boniface/catkin_ws/src/ivr_assignment/src/tools/image_copy1.png")
 image2 = cv2.imread("/home/boniface/catkin_ws/src/ivr_assignment/src/tools/image_copy2.png")
 
-_,yellow_y,_, _ = detect_yellow(image1,image2)
+d = detect_yellow(image1,image2)
+
+d[0]
 
 yellow_contours =detect_yellow_contours(image1)
 
@@ -102,7 +102,9 @@ y1, y2 = get_y1_y2(yellow_contours, blue_contours)
 x1, y1 = yellow_y, int(y1)
 x2, y2 = yellow_y, int(y2)
 
+a = np.max(np.array(blue_contours), axis = 0)
 
+a[0][1]
 
 line_thickness = 2
 cv2.line(image1, (x1, y1), (x2, y2), (0, 255, 0), thickness=line_thickness)
