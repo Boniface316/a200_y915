@@ -22,14 +22,20 @@ def get_transormation_matrix(ja1, ja2, ja3, ja4):
 
     return T0
 
-ja1 = 1
-ja2 = 0
-ja3 = 0
-ja4 = 0
+ja1 = -np.pi/10
+ja2 = -np.pi/3
+ja3 = np.pi/7
+ja4 = -0.3
 
-x_d = np.array([0,0,0,0,0])
+ja1
+ja2
+ja3
+ja4
 
-x_d
+T0 = get_transormation_matrix(ja1, ja2, ja3, ja4)
+x_e = np.array([T0[:3,3]])
+
+x_e
 
 possible_ja1 = np.linspace(-np.pi, np.pi, 100)
 possible_ja2 = np.linspace(-np.pi/2, np.pi/2, 50)
