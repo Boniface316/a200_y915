@@ -52,6 +52,7 @@ class image_converter:
         # initialize error and derivative of error for trajectory tracking
         self.error = np.array([0.0, 0.0,0.0], dtype='float64')
         self.error_d = np.array([0.0, 0.0,0.0], dtype='float64')
+        self.p2m = np.array([0.0], dtype='float64')
         # initialize the bridge between openCV and ROS
         self.bridge = CvBridge()
 
@@ -71,71 +72,6 @@ class image_converter:
             print(e)
 
         #Blob detection starts here-------------------------------------------------------
-
-        def detect_yellow(self,image1, image2):
-            image_gau_blur1 = cv2.GaussianBlur(image1, (1, 1), 0)
-            hsv1 = cv2.cvtColor(image_gau_blur1, cv2.COLOR_BGR2HSV)
-            lower_red1 = np.array([16, 244, 0])
-            higher_red1 = np.array([51, 255, 255])
-            red_range1 = cv2.inRange(hsv1, lower_red1, higher_red1)
-            res_red1 = cv2.bitwise_and(image_gau_blur1, image_gau_blur1, mask=red_range1)
-            red_s_gray1 = cv2.cvtColor(res_red1, cv2.COLOR_BGR2GRAY)
-            canny_edge1 = cv2.Canny(red_s_gray1, 30, 70)
-            contours1, hierarchy1 = cv2.findContours(canny_edge1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-
-            (x1, y1), radius1 = cv2.minEnclosingCircle(contours1[0])
-            cy, cz1 = (int(x1), int(y1))
-            radius1 = int(radius1)
-
-            image_gau_blur2 = cv2.GaussianBlur(image2, (1, 1), 0)
-            hsv2 = cv2.cvtColor(image_gau_blur2, cv2.COLOR_BGR2HSV)
-            lower_red2 = np.array([16, 244, 0])
-            higher_red2 = np.array([51, 255, 255])
-            red_range2 = cv2.inRange(hsv2, lower_red2, higher_red2)
-            res_red2 = cv2.bitwise_and(image_gau_blur2, image_gau_blur2, mask=red_range2)
-            red_s_gray2 = cv2.cvtColor(res_red2, cv2.COLOR_BGR2GRAY)
-            canny_edge2 = cv2.Canny(red_s_gray2, 30, 70)
-            contours2, hierarchy2 = cv2.findContours(canny_edge2, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-
-            (x2, y2), radius2 = cv2.minEnclosingCircle(contours2[0])
-            cx, cz2 = (int(x2), int(y2))
-            radius2 = int(radius2)
-
-            return np.array([cx, cy, cz1, cz2])
-
-
-
-        def detect_blue(self,image1, image2):
-            image_gau_blur1 = cv2.GaussianBlur(image1, (1, 1), 0)
-            hsv1 = cv2.cvtColor(image_gau_blur1, cv2.COLOR_BGR2HSV)
-            lower_red1 = np.array([70, 0, 0])
-            higher_red1 = np.array([255, 255, 255])
-            red_range1 = cv2.inRange(hsv1, lower_red1, higher_red1)
-            res_red1 = cv2.bitwise_and(image_gau_blur1, image_gau_blur1, mask=red_range1)
-            red_s_gray1 = cv2.cvtColor(res_red1, cv2.COLOR_BGR2GRAY)
-            canny_edge1 = cv2.Canny(red_s_gray1, 30, 70)
-            contours1, hierarchy1 = cv2.findContours(canny_edge1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-
-            (x1, y1), radius1 = cv2.minEnclosingCircle(contours1[0])
-            cy, cz1 = (int(x1), int(y1))
-            radius1 = int(radius1)
-
-
-            image_gau_blur2 = cv2.GaussianBlur(image2, (1, 1), 0)
-            hsv2 = cv2.cvtColor(image_gau_blur2, cv2.COLOR_BGR2HSV)
-            lower_red2 = np.array([70, 0, 0])
-            higher_red2 = np.array([255, 255, 255])
-            red_range2 = cv2.inRange(hsv2, lower_red2, higher_red2)
-            res_red2 = cv2.bitwise_and(image_gau_blur2, image_gau_blur2, mask=red_range2)
-            red_s_gray2 = cv2.cvtColor(res_red2, cv2.COLOR_BGR2GRAY)
-            canny_edge2 = cv2.Canny(red_s_gray2, 30, 70)
-            contours2, hierarchy2 = cv2.findContours(canny_edge2, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-
-            (x2, y2), radius2 = cv2.minEnclosingCircle(contours2[0])
-            cx, cz2 = (int(x2), int(y2))
-            radius2 = int(radius2)
-
-            return np.array([cx, cy, cz1, cz2])
 
         def detect_red(self,image1, image2):
             image_gau_blur1 = cv2.GaussianBlur(image1, (1, 1), 0)
@@ -193,6 +129,7 @@ class image_converter:
             (x2, y2), radius2 = cv2.minEnclosingCircle(contours2[0])
             cx, cz2 = (int(x2), int(y2))
             radius2 = int(radius2)
+
             return np.array([cx, cy, cz1, cz2])
 
         def detect_green(self,image1, image2):
@@ -221,6 +158,7 @@ class image_converter:
             (x2, y2), radius2 = cv2.minEnclosingCircle(contours2[0])
             cx, cz2 = (int(x2), int(y2))
             radius2 = int(radius2)
+
             return np.array([cx, cy, cz1, cz2])
 
         def detect_yellow(self,image1, image2):
@@ -291,10 +229,7 @@ class image_converter:
 
             return y1, y2
 
-
         def pixelTometer(image1,image2):
-
-
 
             yellow_contours = detect_yellow_contours(image2)
             blue_contours = detect_blue_contours(image2)
@@ -306,9 +241,10 @@ class image_converter:
             p2m = 2.5/(y1 - y2)
             #65 is the best number
 
+            print(p2m)
+
 
             return p2m
-
 
 
         #FK starts here--------------------------------------------------------------------------------
@@ -339,15 +275,21 @@ class image_converter:
             return x_d
 
         def end_effector_position(self, image1, image2):
-            p = pixelTometer(image1,image2)
+            try:
+                p=pixelTometer(self,image1,image2)
+                self.p2m = p
+            except Exception as e:
+                p = self.p2m
             yellow_posn = detect_yellow(self,image1, image2)
             red_posn = detect_red(self, image1, image2)
             yellow_posn[3] = 800 - yellow_posn[3]
             red_posn[3] = 800 - red_posn[3]
 
+
             cx, cy, cz1, cz2 = p * (red_posn - yellow_posn)
+            print(p)
             ee_posn = np.array([cx, cy, cz2])
-            ee_posn = np.round(ee_posn,1)
+            ee_posn = np.round(ee_posn,2)
             return ee_posn
 
         def draw_line(self, image1, image2):
@@ -381,8 +323,6 @@ class image_converter:
 
 
 
-
-
 #Control Part starts here------------------------------------------------------------------------------------------
 
         #Estimate control inputs for open-loop control
@@ -396,6 +336,7 @@ class image_converter:
         vision_end_effector = end_effector_position(self, self.image1, self.image2)
 
         print(vision_end_effector)
+
 
         #draw_line(self, self.image1, self.image2)
 
