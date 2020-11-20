@@ -5,6 +5,7 @@ import sys
 import rospy
 import cv2
 import math
+import utils2
 import imutils
 import statistics
 import numpy as np
@@ -46,13 +47,6 @@ class image_converter:
         self.image_sub2 = rospy.Subscriber("/camera2/robot/image_raw", Image, self.callback2)
         #initialize a publisher to send desired trajectory
         self.time_trajectory = rospy.get_time()
-        self.red = np.array([0.0, 0.0, 0.0, 0.0], dtype='float64')
-        self.green = np.array([0.0, 0.0, 0.0, 0.0], dtype='float64')
-        self.p2m = np.array([0.0], dtype='float64')
-        self.joint1 = np.array([0.0], dtype='float64')
-        self.joint2 = np.array([0.0], dtype='float64')
-        self.joint3 = np.array([0.0], dtype='float64')
-        self.joint4 = np.array([0.0], dtype='float64')
         # initialize errors
         self.time_previous_step = np.array([rospy.get_time()], dtype='float64')
         self.time_previous_step2 = np.array([rospy.get_time()], dtype='float64')
@@ -79,210 +73,85 @@ class image_converter:
 
         #Blob detection starts here-------------------------------------------------------
 
+        def detect_yellow(self,image1, image2):
+            mask1 = cv2.inRange(image1, (0, 100, 100), (0, 255, 255))
+            kernel = np.ones((5, 5), np.uint8)
+            mask1 = cv2.dilate(mask1, kernel, iterations=3)
+            M1 = cv2.moments(mask1)
+
+            mask2 = cv2.inRange(image2, (0, 100, 100), (0, 255, 255))
+            mask2 = cv2.dilate(mask2, kernel, iterations=3)
+            M2 = cv2.moments(mask2)
+            cy = int(M1['m10'] / M1['m00'])
+            cz = int(M1['m01'] / M1['m00'])
+            cx = int(M2['m10'] / M2['m00'])
+            ct = int(M2['m01'] / M2['m00'])
+            return np.array([cx, cy, cz, ct])
+
         def detect_red(self,image1, image2):
-            image_gau_blur1 = cv2.GaussianBlur(image1, (1, 1), 0)
-            hsv1 = cv2.cvtColor(image_gau_blur1, cv2.COLOR_BGR2HSV)
-            lower_red1 = np.array([0, 200, 0])
-            higher_red1 = np.array([0, 255, 255])
-            red_range1 = cv2.inRange(hsv1, lower_red1, higher_red1)
-            res_red1 = cv2.bitwise_and(image_gau_blur1, image_gau_blur1, mask=red_range1)
-            red_s_gray1 = cv2.cvtColor(res_red1, cv2.COLOR_BGR2GRAY)
-            canny_edge1 = cv2.Canny(red_s_gray1, 30, 70)
-            contours1, hierarchy1 = cv2.findContours(canny_edge1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-            # cv2.drawContours(image1, contours1, -1, (255, 255, 255), 1)
-            (x1, y1), radius1 = cv2.minEnclosingCircle(contours1[0])
-            cy, cz1 = (int(x1), int(y1))
-            radius1 = int(radius1)
-            # cv2.circle(image1, (cy, cz1), radius1, (255, 255, 255), 2)
+            mask1 = cv2.inRange(image1, (0, 0, 100), (0, 0, 255))
+            kernel = np.ones((5, 5), np.uint8)
+            mask1 = cv2.dilate(mask1, kernel, iterations=3)
+            M1 = cv2.moments(mask1)
 
-            image_gau_blur2 = cv2.GaussianBlur(image2, (1, 1), 0)
-            hsv2 = cv2.cvtColor(image_gau_blur2, cv2.COLOR_BGR2HSV)
-            lower_red2 = np.array([0, 200, 0])
-            higher_red2 = np.array([0, 255, 255])
-            red_range2 = cv2.inRange(hsv2, lower_red2, higher_red2)
-            res_red2 = cv2.bitwise_and(image_gau_blur2, image_gau_blur2, mask=red_range2)
-            red_s_gray2 = cv2.cvtColor(res_red2, cv2.COLOR_BGR2GRAY)
-            canny_edge2 = cv2.Canny(red_s_gray2, 30, 70)
-            contours2, hierarchy2 = cv2.findContours(canny_edge2, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-            (x2, y2), radius2 = cv2.minEnclosingCircle(contours2[0])
-            cx, cz2 = (int(x2), int(y2))
-            radius2 = int(radius2)
-
-            return np.array([cx, cy, cz1, cz2])
+            mask2 = cv2.inRange(image2, (0, 0, 100), (0, 0, 255))
+            mask2 = cv2.dilate(mask2, kernel, iterations=3)
+            M2 = cv2.moments(mask2)
+            cy = int(M1['m10'] / M1['m00'])
+            cz = int(M1['m01'] / M1['m00'])
+            cx = int(M2['m10'] / M2['m00'])
+            ct = int(M2['m01'] / M2['m00'])
+            return np.array([cx, cy, cz, ct])
 
         def detect_blue(self,image1, image2):
-            image_gau_blur1 = cv2.GaussianBlur(image1, (1, 1), 0)
-            hsv1 = cv2.cvtColor(image_gau_blur1, cv2.COLOR_BGR2HSV)
-            lower_red1 = np.array([70, 0, 0])
-            higher_red1 = np.array([255, 255, 255])
-            red_range1 = cv2.inRange(hsv1, lower_red1, higher_red1)
-            res_red1 = cv2.bitwise_and(image_gau_blur1, image_gau_blur1, mask=red_range1)
-            red_s_gray1 = cv2.cvtColor(res_red1, cv2.COLOR_BGR2GRAY)
-            canny_edge1 = cv2.Canny(red_s_gray1, 30, 70)
-            contours1, hierarchy1 = cv2.findContours(canny_edge1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+            mask1 = cv2.inRange(image1, (100, 0, 0), (255, 0, 0))
+            kernel = np.ones((5, 5), np.uint8)
+            mask1 = cv2.dilate(mask1, kernel, iterations=3)
+            M1 = cv2.moments(mask1)
 
-            (x1, y1), radius1 = cv2.minEnclosingCircle(contours1[0])
-            cy, cz1 = (int(x1), int(y1))
-            radius1 = int(radius1)
+            mask2 = cv2.inRange(image2, (100, 0, 0), (255, 0, 0))
+            mask2 = cv2.dilate(mask2, kernel, iterations=3)
+            M2 = cv2.moments(mask2)
+            cy = int(M1['m10'] / M1['m00'])
+            cz = int(M1['m01'] / M1['m00'])
+            cx = int(M2['m10'] / M2['m00'])
+            ct = int(M2['m01'] / M2['m00'])
 
-
-            image_gau_blur2 = cv2.GaussianBlur(image2, (1, 1), 0)
-            hsv2 = cv2.cvtColor(image_gau_blur2, cv2.COLOR_BGR2HSV)
-            lower_red2 = np.array([70, 0, 0])
-            higher_red2 = np.array([255, 255, 255])
-            red_range2 = cv2.inRange(hsv2, lower_red2, higher_red2)
-            res_red2 = cv2.bitwise_and(image_gau_blur2, image_gau_blur2, mask=red_range2)
-            red_s_gray2 = cv2.cvtColor(res_red2, cv2.COLOR_BGR2GRAY)
-            canny_edge2 = cv2.Canny(red_s_gray2, 30, 70)
-            contours2, hierarchy2 = cv2.findContours(canny_edge2, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-
-            (x2, y2), radius2 = cv2.minEnclosingCircle(contours2[0])
-            cx, cz2 = (int(x2), int(y2))
-            radius2 = int(radius2)
-
-            return np.array([cx, cy, cz1, cz2])
+            return np.array([cx, cy, cz, ct])
 
         def detect_green(self,image1, image2):
-            image_gau_blur1 = cv2.GaussianBlur(image1, (1, 1), 0)
-            hsv1 = cv2.cvtColor(image_gau_blur1, cv2.COLOR_BGR2HSV)
-            lower_red1 = np.array([55, 0, 0])
-            higher_red1 = np.array([100, 255, 255])
-            red_range1 = cv2.inRange(hsv1, lower_red1, higher_red1)
-            res_red1 = cv2.bitwise_and(image_gau_blur1, image_gau_blur1, mask=red_range1)
-            red_s_gray1 = cv2.cvtColor(res_red1, cv2.COLOR_BGR2GRAY)
-            canny_edge1 = cv2.Canny(red_s_gray1, 30, 70)
-            contours1, hierarchy1 = cv2.findContours(canny_edge1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+            mask1 = cv2.inRange(image1, (0, 100, 0), (0, 255, 0))
+            kernel = np.ones((5, 5), np.uint8)
+            mask1 = cv2.dilate(mask1, kernel, iterations=3)
+            M1 = cv2.moments(mask1)
 
-            (x1, y1), radius1 = cv2.minEnclosingCircle(contours1[0])
-            cy, cz1 = (int(x1), int(y1))
-            radius1 = int(radius1)
+            mask2 = cv2.inRange(image2, (0, 100, 0), (0, 255, 0))
+            mask2 = cv2.dilate(mask2, kernel, iterations=3)
+            M2 = cv2.moments(mask2)
+            cy = int(M1['m10'] / M1['m00'])
+            cz = int(M1['m01'] / M1['m00'])
+            cx = int(M2['m10'] / M2['m00'])
+            ct = int(M2['m01'] / M2['m00'])
 
+            return np.array([cx, cy, cz, ct])
 
-            image_gau_blur2 = cv2.GaussianBlur(image2, (1, 1), 0)
-            hsv2 = cv2.cvtColor(image_gau_blur2, cv2.COLOR_BGR2HSV)
-            lower_red2 = np.array([55, 0, 0])
-            higher_red2 = np.array([100, 255, 255])
-            red_range2 = cv2.inRange(hsv2, lower_red2, higher_red2)
-            res_red2 = cv2.bitwise_and(image_gau_blur2, image_gau_blur2, mask=red_range2)
-            red_s_gray2 = cv2.cvtColor(res_red2, cv2.COLOR_BGR2GRAY)
-            canny_edge2 = cv2.Canny(red_s_gray2, 30, 70)
-            contours2, hierarchy2 = cv2.findContours(canny_edge2, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-            (x2, y2), radius2 = cv2.minEnclosingCircle(contours2[0])
-            cx, cz2 = (int(x2), int(y2))
-            radius2 = int(radius2)
-
-            return np.array([cx, cy, cz1, cz2])
-
-        def detect_yellow(self,image1, image2):
-            image_gau_blur1 = cv2.GaussianBlur(image1, (1, 1), 0)
-            hsv1 = cv2.cvtColor(image_gau_blur1, cv2.COLOR_BGR2HSV)
-            lower_red1 = np.array([16, 244, 0])
-            higher_red1 = np.array([51, 255, 255])
-            red_range1 = cv2.inRange(hsv1, lower_red1, higher_red1)
-            res_red1 = cv2.bitwise_and(image_gau_blur1, image_gau_blur1, mask=red_range1)
-            red_s_gray1 = cv2.cvtColor(res_red1, cv2.COLOR_BGR2GRAY)
-            canny_edge1 = cv2.Canny(red_s_gray1, 30, 70)
-            contours1, hierarchy1 = cv2.findContours(canny_edge1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-
-            (x1, y1), radius1 = cv2.minEnclosingCircle(contours1[0])
-            cy, cz1 = (int(x1), int(y1))
-            radius1 = int(radius1)
-
-            image_gau_blur2 = cv2.GaussianBlur(image2, (1, 1), 0)
-            hsv2 = cv2.cvtColor(image_gau_blur2, cv2.COLOR_BGR2HSV)
-            lower_red2 = np.array([16, 244, 0])
-            higher_red2 = np.array([51, 255, 255])
-            red_range2 = cv2.inRange(hsv2, lower_red2, higher_red2)
-            res_red2 = cv2.bitwise_and(image_gau_blur2, image_gau_blur2, mask=red_range2)
-            red_s_gray2 = cv2.cvtColor(res_red2, cv2.COLOR_BGR2GRAY)
-            canny_edge2 = cv2.Canny(red_s_gray2, 30, 70)
-            contours2, hierarchy2 = cv2.findContours(canny_edge2, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-
-            (x2, y2), radius2 = cv2.minEnclosingCircle(contours2[0])
-            cx, cz2 = (int(x2), int(y2))
-            radius2 = int(radius2)
-
-            return np.array([cx, cy, cz1, cz2])
-
-        def detect_blue_contours(image1):
-            image_gau_blur1 = cv2.GaussianBlur(image1, (1, 1), 0)
-            hsv1 = cv2.cvtColor(image_gau_blur1, cv2.COLOR_BGR2HSV)
-            lower_red1 = np.array([70, 0, 0])
-            higher_red1 = np.array([255, 255, 255])
-            red_range1 = cv2.inRange(hsv1, lower_red1, higher_red1)
-            res_red1 = cv2.bitwise_and(image_gau_blur1, image_gau_blur1, mask=red_range1)
-            red_s_gray1 = cv2.cvtColor(res_red1, cv2.COLOR_BGR2GRAY)
-            canny_edge1 = cv2.Canny(red_s_gray1, 30, 70)
-            contours1, hierarchy1 = cv2.findContours(canny_edge1,cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-            return np.array([contours1])
-
-        def detect_yellow_contours(image1):
-            image_gau_blur1 = cv2.GaussianBlur(image1, (1, 1), 0)
-            hsv1 = cv2.cvtColor(image_gau_blur1, cv2.COLOR_BGR2HSV)
-            lower_red1 = np.array([16, 244, 0])
-            higher_red1 = np.array([51, 255, 255])
-            red_range1 = cv2.inRange(hsv1, lower_red1, higher_red1)
-            res_red1 = cv2.bitwise_and(image_gau_blur1, image_gau_blur1, mask=red_range1)
-            red_s_gray1 = cv2.cvtColor(res_red1, cv2.COLOR_BGR2GRAY)
-            canny_edge1 = cv2.Canny(red_s_gray1, 30, 70)
-            contours1, hierarchy1 = cv2.findContours(canny_edge1,cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-            (x1, y1), radius1 = cv2.minEnclosingCircle(contours1[0])
-            cy,cz1 = (int(x1), int(y1))
-
-            return np.array([contours1])
-
-        def get_y1_y2(yellow_contours, blue_contours):
-            y1 = np.min(yellow_contours, axis = 0)
-            y1 = y1[0][1]
-            y1 = y1[:,1]
-
-            y2 = np.max(blue_contours, axis = 0)
-            y2 = y2[0][1]
-            y2 = y2[:,1]
-
-            return y1, y2
-
-        def pixelTometer(self, image1,image2):
-
-            yellow_contours = detect_yellow_contours(image2)
-            blue_contours = detect_blue_contours(image2)
-            y2 = detect_blue(self, image1, image2)
-            y2 = y2[3]
-
-            y1, y2 = get_y1_y2(yellow_contours, blue_contours)
-
-            p2m = 2.5/(y1 - y2)
-            #65 is the best number
-
-            return p2m
+        def pixelTometer(self,image1, image2):
+            circle1pos = detect_blue(self,image1, image2)
+            z1 = 800 - circle1pos[3]
+            circle2pos = detect_yellow(self,image1, image2)
+            z2 = 800 - circle2pos[3]
+            distance = z1 - z2
+            return 2.5 / distance
 
         #----------------------------------------------------------------------------------------------
         #Angle Detection starts here
         def detect_angles_blob(self,image1,image2):
-            try:
-                p=pixelTometer(self,image1,image2)
-                self.p2m = p
-            except Exception as e:
-                p = self.p2m
-
-
-            try:
-                green = detect_green(self, image1, image2)
-                self.green = green
-            except Exception as e:
-                green = self.green
-
-            try:
-                red = detect_red(self, image1, image2)
-                self.red = red
-            except Exception as e:
-                red = self.red
-
             p=pixelTometer(self,image1,image2)
             yellow=p*detect_yellow(self,image1,image2)
             blue=p*detect_blue(self,image1,image2)
-
-            ja1=0.0
+            green=p*detect_green(self,image1,image2)
+            red=p*detect_red(self,image1,image2)
+            ja1=0.1
             ja2=np.pi/2-np.arctan2((blue[2] - green[2]), (blue[1] - green[1]))
             ja3 = np.arctan2((blue[3] - green[3]), (blue[0] - green[0]))-np.pi/2
             ja4 = np.arctan2((green[2] - red[2]), -(green[1] - red[1]))-np.pi/2-ja2
@@ -297,31 +166,19 @@ class image_converter:
             ja4 = float((np.pi / 2) * np.sin((np.pi / 20) * curr_time))
             return np.array([ja1, ja2, ja3, ja4])
 
-        def actual_target_position(self):
-            curr_time = np.array([rospy.get_time() - self.time_trajectory])
-            x_d = float((2.5 * np.cos(curr_time * np.pi / 15))+0.5)
-            y_d = float(2.5 * np.sin(curr_time * np.pi / 15))
-            z_d = float((1 * np.sin(curr_time * np.pi / 15))+7.0)
-            return np.array([x_d,y_d,z_d])
 
         #FK starts here--------------------------------------------------------------------------------
 
 
         def end_effector_position(self, image1, image2):
-            try:
-                p=pixelTometer(self,image1,image2)
-                self.p2m = p
-            except Exception as e:
-                p = self.p2m
-            yellow_posn = detect_yellow(self,image1, image2)
+            p = pixelTometer(self, image1, image2)
+            m = np.array([[0, -1, 0], [1, 0, 0], [0, 0, 1]])
+            yellow_posn = detect_yellow(self, image1, image2)
             red_posn = detect_red(self, image1, image2)
             yellow_posn[3] = 800 - yellow_posn[3]
             red_posn[3] = 800 - red_posn[3]
-
             cx, cy, cz1, cz2 = p * (red_posn - yellow_posn)
-            ee_posn = np.array([cx, cy, cz2])
-            ee_posn = np.round(ee_posn,1)
-            return ee_posn
+            return np.array([cx, cy, cz2])
 
         def calculate_jacobian(self,image1,image2):
             ja1,ja2,ja3,ja4=detect_angles_blob(self,image1,image2)
@@ -453,14 +310,13 @@ class image_converter:
             centerY, centerZ1 = detect_shape(self, mask1, template)
             centerX, centerZ2 = detect_shape(self, mask2, template)
 
-            try:
-                p=pixelTometer(self,image1,image2)
-                self.p2m = p
-            except Exception as e:
-                p = self.p2m
+            p = pixelTometer(self, image1, image2)
 
             image1 = cv2.circle(image1, (int(centerY), int(centerZ1)), radius=2, color=(255, 255, 255), thickness=-1)
             image2 = cv2.circle(image2, (int(centerX), int(centerZ2)), radius=2, color=(255, 255, 255), thickness=-1)
+
+            # cv2.imshow("image1", image1)
+            # cv2.imshow("image2", image2)
 
             target_location = get_target_location(self, centerX, centerY, centerZ1)
             target_location_meters = target_location*p
@@ -491,18 +347,10 @@ class image_converter:
             # estimate error
             self.error = pos_d - pos
             q = angle_trajectory(self)#detect_angles_blob(self,image1,image2) # estimate initial value of joints'
-
             J_inv = np.linalg.pinv(calculate_jacobian(self,image1,image2))  # calculating the psudeo inverse of Jacobian
             dq_d = np.dot(J_inv, (np.dot(K_d, self.error_d.transpose()) + np.dot(K_p,
                                                                                  self.error.transpose())))  # control input (angular velocity of joints)
             q_d = q + (dt * dq_d)  # control input (angular position of joints)
-
-            print("ja1 published: "+ str(self.joint1.data))
-            print("ja2 published: " + str(self.joint2.data))
-            print("ja3 published: "+ str(self.joint3.data))
-            print("ja4 published: " + str(self.joint4.data))
-
-
             return q_d
 
         cv2.waitKey(1)
@@ -510,11 +358,7 @@ class image_converter:
 
         # send control commands to joints (for lab 3)
         q_d = control_closed(self, self.image1,self.image2)
-
-
-        x_a=actual_target_position(self)
-        self.actual_target= Float64MultiArray()
-        self.actual_target.data = x_a
+        print (q_d)
 
         self.joints = Float64MultiArray()
         self.joints.data = detect_angles_blob(self,self.image1,self.image2)
@@ -527,8 +371,6 @@ class image_converter:
         self.joint3.data = q_d[2]
         self.joint4 = Float64()
         self.joint4.data = q_d[3]
-
-        #print(self.joint1.data)
 
 
         vision_end_effector = end_effector_position(self, self.image1, self.image2)
@@ -546,7 +388,6 @@ class image_converter:
             self.image_pub2.publish(self.bridge.cv2_to_imgmsg(self.image2, "bgr8"))
             self.vision_end_effector_pub.publish((self.vision_EF))
             self.vision_target_trajectory_pub.publish((self.vision_target))
-            self.actual_target_trajectory_pub.publish((self.actual_target))
             self.joints_pub.publish(self.joints)
             self.robot_joint1_pub.publish(self.joint1)
             self.robot_joint2_pub.publish(self.joint2)
@@ -569,3 +410,4 @@ def main(args):
 # run the code if the node is called
 if __name__ == '__main__':
     main(sys.argv)
+
