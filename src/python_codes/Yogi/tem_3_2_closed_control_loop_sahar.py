@@ -256,6 +256,38 @@ class image_converter:
 
         #----------------------------------------------------------------------------------------------
         #Angle Detection starts here
+
+        def get_ja3(green_posn, yellow_posn, p):
+            green = green_posn - yellow_posn
+            X_green = green[0]*p
+            if X_green > 3.5:
+                X_green = 3.5
+            elif X_green < -3.5:
+                X_green = -3.5
+
+            ja3 = np.arcsin(X_green/ 3.5)
+            return ja3
+
+        def get_ja2(green_posn, yellow_posn, p, ja3):
+            green = green_posn - yellow_posn
+            Y_green = green[1]*p
+
+            if Y_green[0] > 3.5:
+                Y_green[0] = 3.5
+            elif Y_green[0] < -3.5:
+                Y_green[0] = -3.5
+
+            arc_sin_val = np.round(Y_green[0]/(-3.5*np.cos(ja3)),2)
+
+            if arc_sin_val > 1:
+                arc_sin_val = 1
+            elif arc_sin_val < -1:
+                arc_sin_val = -1
+
+            ja2 = np.arcsin(arc_sin_val)
+
+            return ja2
+
         def detect_angles_blob(self,image1,image2):
             try:
                 p=pixelTometer(self,image1,image2)
@@ -277,13 +309,35 @@ class image_converter:
                 red = self.red
 
             p=pixelTometer(self,image1,image2)
-            yellow=p*detect_yellow(self,image1,image2)
-            blue=p*detect_blue(self,image1,image2)
+            yellow=detect_yellow(self,image1,image2)
+            blue=detect_blue(self,image1,image2)
+
+            green[2] = 800 - green[2]
+            yellow[2] = 800 - yellow[2]
+            red[2] = 800 - red[2]
 
             ja1=0.0
-            ja2=np.pi/2-np.arctan2((blue[2] - green[2]), (blue[1] - green[1]))
-            ja3 = np.arctan2((blue[3] - green[3]), (blue[0] - green[0]))-np.pi/2
+            ja3 = get_ja3(green, yellow, p)
+            ja2 = get_ja2(green, yellow, p, ja3)
+
+
+            try:
+                green = detect_green(self, image1, image2)
+                self.green = green
+            except Exception as e:
+                green = self.green
+
+            try:
+                red = detect_red(self, image1, image2)
+                self.red = red
+            except Exception as e:
+                red = self.red
+
+            yellow=p*detect_yellow(self,image1,image2)
+            blue=p*detect_blue(self,image1,image2)
             ja4 = np.arctan2((green[2] - red[2]), -(green[1] - red[1]))-np.pi/2-ja2
+
+            print(ja1, ja2, ja3, ja4)
 
             return np.array([ja1,ja2,ja3,ja4])
 
@@ -489,7 +543,18 @@ class image_converter:
             # estimate error
             self.error = pos_d - pos
 
-            q=detect_angles_blob(self,image1,image2) # estimate initial value of joints'
+            delta_time = cur_time - self.time_trajectory
+            print("--------")
+
+            if delta_time < 5:
+                q=detect_angles_blob(self,image1,image2) # estimate initial value of joints'
+                print(q)
+            else:
+                q = np.array([self.joint1.data,self.joint2.data,self.joint3.data,self.joint4.data])
+                print("from self")
+
+                print(q)
+
 
             J_inv = np.linalg.pinv(calculate_jacobian(self,image1,image2))  # calculating the psudeo inverse of Jacobian
             dq_d = np.dot(J_inv, (np.dot(K_d, self.error_d.transpose()) + np.dot(K_p,
@@ -505,22 +570,24 @@ class image_converter:
         # send control commands to joints (for lab 3)
         q_d = control_closed(self, self.image1,self.image2)
 
+        print(q_d)
+
 
         x_a=actual_target_position(self)
         self.actual_target= Float64MultiArray()
         self.actual_target.data = x_a
 
-        self.joints = Float64MultiArray()
-        self.joints.data = detect_angles_blob(self,self.image1,self.image2)
-        ja1,ja2,ja3,ja4=angle_trajectory(self)
-        self.joint1 = Float64()
-        self.joint1.data = q_d[0]
-        self.joint2 = Float64()
-        self.joint2.data = q_d[1]
-        self.joint3 = Float64()
-        self.joint3.data = q_d[2]
-        self.joint4 = Float64()
-        self.joint4.data = q_d[3]
+        q = detect_angles_blob(self, self.image1, self.image2)
+        print(q)
+
+        #self.joints = Float64MultiArray()
+        #self.joints.data = detect_angles_blob(self,self.image1,self.image2)
+
+
+        #self.joint1.data = q_d[0]
+        #self.joint2.data = q_d[1]
+        #self.joint3.data = q_d[2]
+        #self.joint4.data = q_d[3]
 
         #print(self.joint1.data)
 
@@ -540,12 +607,12 @@ class image_converter:
             self.image_pub2.publish(self.bridge.cv2_to_imgmsg(self.image2, "bgr8"))
             self.vision_end_effector_pub.publish((self.vision_EF))
             self.vision_target_trajectory_pub.publish((self.vision_target))
-            self.actual_target_trajectory_pub.publish((self.actual_target))
-            self.joints_pub.publish(self.joints)
-            self.robot_joint1_pub.publish(self.joint1)
-            self.robot_joint2_pub.publish(self.joint2)
-            self.robot_joint3_pub.publish(self.joint3)
-            self.robot_joint4_pub.publish(self.joint4)
+            #self.actual_target_trajectory_pub.publish((self.actual_target))
+            #self.joints_pub.publish(self.joints)
+            #self.robot_joint1_pub.publish(self.joint1)
+            #self.robot_joint2_pub.publish(self.joint2)
+            #self.robot_joint3_pub.publish(self.joint3)
+            #self.robot_joint4_pub.publish(self.joint4)
 
 
         except CvBridgeError as e:

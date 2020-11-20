@@ -278,7 +278,7 @@ class image_converter:
             ja1=0.0
             ja3 = get_ja3(green, yellow, p)
             ja2 = get_ja2(green, yellow, p, ja3)
-            
+
 
             try:
                 green = detect_green(self, image1, image2)
@@ -336,53 +336,6 @@ class image_converter:
             ja2 = np.arcsin(arc_sin_val)
 
             return ja2
-
-        def get_ja4(ja2, ja3, red_posn, yellow_posn, p):
-            red_posn = green_posn - yellow_posn
-            red_posn = p*red_posn
-
-            a = np.cos(ja2)*np.cos(ja3)
-            b = -np.sin(ja2)
-
-            c = (red_posn[2] - 2.5 - (3.5*np.cos(ja2)*np.cos(ja3)))/2
-
-            d = np.sin(ja2)*np.cos(ja3)
-            e = np.cos(ja2)
-
-            f = (red_posn[1] + 3.5*np.sin(ja2)*np.cos(ja3))/-3
-
-            B = np.array([c,f])
-            A = np.array([[a,b], [d,e]])
-
-            A = A.reshape((2,2))
-            try:
-                X = np.linalg.solve(A, B)
-                ja4 = np.arcsin(X[1])
-                self.ja4 = ja4
-            except Exception as e:
-                ja4 = self.ja4
-
-
-
-
-
-            return ja4
-
-        #p = pixelTometer(self,self.image1,self.image2)
-        #green_posn = detect_green(self, self.image1, self.image2)
-        #yellow_posn = detect_yellow(self, self.image1, self.image2)
-        #red_posn = detect_red(self, self.image1, self.image2)
-
-        #green_posn[2] = 800 - green_posn[2]
-        #yellow_posn[2] = 800 - yellow_posn[2]
-        #red_posn[2] = 800 - red_posn[2]
-
-        #ja3_cal = get_ja3(green_posn, yellow_posn, p)
-
-        #ja2_cal = get_ja2(green_posn, yellow_posn, p, ja3_cal)
-
-        #ja4_cal = get_ja4(ja2_cal, ja3_cal, red_posn, yellow_posn, p)
-
 
         self.joints = Float64MultiArray()
         self.joints.data = detect_angles_blob(self,self.image1,self.image2)
