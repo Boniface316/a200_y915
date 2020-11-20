@@ -488,17 +488,13 @@ class image_converter:
             self.error_d = ((pos_d - pos) - self.error) / dt
             # estimate error
             self.error = pos_d - pos
-            q = np.array([self.joint1.data,self.joint2.data,self.joint3.data,self.joint4.data])#detect_angles_blob(self,image1,image2) # estimate initial value of joints'
+
+            q=detect_angles_blob(self,image1,image2) # estimate initial value of joints'
 
             J_inv = np.linalg.pinv(calculate_jacobian(self,image1,image2))  # calculating the psudeo inverse of Jacobian
             dq_d = np.dot(J_inv, (np.dot(K_d, self.error_d.transpose()) + np.dot(K_p,
                                                                                  self.error.transpose())))  # control input (angular velocity of joints)
             q_d = q + (dt * dq_d)  # control input (angular position of joints)
-
-            print((self.joint1.data))
-            print((self.joint2.data))
-            print( (self.joint3.data))
-            print((self.joint4.data))
 
 
             return q_d
