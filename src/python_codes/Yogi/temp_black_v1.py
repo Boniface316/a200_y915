@@ -49,6 +49,7 @@ class image_converter:
         self.counter = np.array([0.0], dtype='float64')
         self.base_location = (0,0)
         self.ee_location = (0,0)
+        self.green_location = (0.0)
         # initialize the bridge between openCV and ROS
         self.bridge = CvBridge()
 
@@ -351,27 +352,26 @@ class image_converter:
             return image1
 
         def create_boxes(pt,w,h):
-            box_4 = (pt[0]-w, pt[1])
-            box_1 = (box_4[0], box_4[1] - h)
+            box_3 = (pt[0]-w, pt[1])
+            box_0 = (box_3[0], box_3[1] - h)
+            box_1 = (box_0[0]+w, box_0[1])
             box_2 = (box_1[0]+w, box_1[1])
-            box_3 = (box_2[0]+w, box_2[1])
-            box_7 = (box_4[0], box_4[1] + h)
-            box_6 = (pt[0]+w, pt[1])
+            box_6 = (box_3[0], box_3[1] + h)
+            box_5 = (pt[0]+w, pt[1])
+            box_7 = (box_6[0]+w, box_6[1])
             box_8 = (box_7[0]+w, box_7[1])
-            box_9 = (box_8[0]+w, box_8[1])
 
-            boxes = (box_1, box_2, box_3, box_4, pt, box_6, box_7, box_8, box_9)
+            boxes = (box_0, box_1, box_2, box_3, pt, box_5, box_6, box_7, box_8)
 
             return boxes
 
-        def draw_box(self, image1, image2, template, counter):
+        def draw_box(self, image1, image2, template, counter, base_template, ee_template):
             #incomplete code
+            w, h = template.shape[::-1]
 
-            if counter < 300:
+            if counter < 20:
                 mask1 = cv2.inRange(image1, (0, 0, 0), (180, 255, 30))
                 thresh1, dst1 = cv2.threshold(mask1, 5, 255, cv2.THRESH_BINARY_INV )
-
-                w, h = template.shape[::-1]
 
                 res = cv2.matchTemplate(dst1,template,cv2.TM_CCOEFF_NORMED)
 
@@ -380,40 +380,63 @@ class image_converter:
 
                 try:
                     pt = (int(statistics.mean(loc[1])),int(statistics.mean(loc[0])))
-                    self.base_location = pt
+                    self.green_location = pt
                 except Exception as e:
-                    pt  = self.base_location
+                    pt  = self.green_location
 
 
                 boxes = create_boxes(pt,w,h)
 
-                for box in boxes:
-                    cv2.rectangle(dst1, box, (box[0] + w, box[1] + h), (0,0,0), 2)
+
+                cv2.imshow("middle", dst)
 
 
-                #cv2.rectangle(dst1, box_2, (box_2[0] + w, box_2[1] + h), (0,0,0), 2)
-                #cv2.rectangle(dst1, box_3, (box_3[0] + w, box_3[1] + h), (0,0,0), 2)
-                #cv2.rectangle(dst1, box_4, (box_4[0] + w, box_4[1] + h), (0,0,0), 2)
-                #cv2.rectangle(dst1, pt, (pt[0] + w, pt[1] + h), (0,0,0), 2)
-                #cv2.rectangle(dst1, box_6, (box_6[0] + w, box_6[1] + h), (0,0,0), 2)
-                #cv2.rectangle(dst1, box_7, (box_7[0] + w, box_7[1] + h), (0,0,0), 2)
-                #cv2.rectangle(dst1, box_8, (box_8[0] + w, box_8[1] + h), (0,0,0), 2)
-                #cv2.rectangle(dst1, box_9, (box_9[0] + w, box_9[1] + h), (0,0,0), 2)
-
-                #self.box5 = pt
-
-
-
-
-
-
-
-
-                cv2.imshow("middle", dst1)
             else:
-                print(counter)
+                #image1 = template_match_base(self, image1, image2, base_template)
+                image1 = ee_template_match(self, image1, image2, base_template, ee_template)
+
+                boxes  = create_boxes(self.green_location, w, h)
+                green_location = count_black_pixels(boxes, image1, template)
+                self.green_location = green_location
+
 
             return 0
+
+        def count_black_pixels(boxes, image, template):
+            counts = []
+            mask = cv2.inRange(image, (0, 0, 0), (180, 255, 30))
+            thresh, dst = cv2.threshold(mask, 5, 255, cv2.THRESH_BINARY_INV )
+            w, h = template.shape[::-1]
+
+            for box in boxes:
+                counts = []
+
+                for box in boxes:
+                    x_start = box[0]
+                    y_start = box[1]
+                    x_end = x_start + w
+                    y_end = y_start + h
+                    cropped_image = dst[y_start:y_end, x_start:x_end]
+
+                    white_pixels_count = cv2.countNonZero(cropped_image)
+                    total_number_of_pixel = cropped_image.shape[0]*cropped_image.shape[1]
+                    black_pixel_count = total_number_of_pixel - white_pixels_count
+                    counts.append(black_pixel_count)
+
+                green_location_box = np.argmax(counts)
+                box_location = boxes[green_location_box]
+                x_start = box_location[0]
+                y_start = box_location[1]
+                x_end = x_start + w
+                y_end = y_start + h
+                center_of_box = (int((x_start+x_end)/2),int((y_start + y_end)/2))
+                cv2.circle(image, center_of_box, 2, (255,0,255), 2)
+                cv2.rectangle(image, (x_start, y_start), (x_end, y_end), (0,0,0), 2)
+                cv2.imshow("box", image)
+                return center_of_box
+
+
+
 
 
 
@@ -422,6 +445,7 @@ class image_converter:
         #self.joints.data = detect_angles_blob(self,self.image1,self.image2)
 
         counter = self.counter
+
 
         if counter > 30:
             ja1,ja2,ja3,ja4=angle_trajectory(self)
@@ -438,7 +462,7 @@ class image_converter:
 
         base_template = cv2.imread("/home/boniface/catkin_ws/src/ivr_assignment/src/python_codes/Yogi/full_base.png",0)
         ee_template = cv2.imread("/home/boniface/catkin_ws/src/ivr_assignment/src/python_codes/Yogi/ee_template_2.png", 0)
-        middle_template = cv2.imread("/home/boniface/catkin_ws/src/ivr_assignment/src/python_codes/Yogi/cropped_blob.png", 0)
+        middle_template = cv2.imread("/home/boniface/catkin_ws/src/ivr_assignment/src/python_codes/Yogi/middle_template.png", 0)
 
         #template_match_base(self, self.image1, self.image2, base_template)
         #image1 = template_match_base(self,self.image1,self.image2, base_template)
@@ -448,7 +472,7 @@ class image_converter:
         #contour_method4(self,image1,self.image2)
         cv2.waitKey(1)
 
-        draw_box(self, self.image1, self.image2, middle_template, counter)
+        draw_box(self, self.image1, self.image2, middle_template, counter, base_template, ee_template)
 
 
 
