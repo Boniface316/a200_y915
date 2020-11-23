@@ -50,7 +50,8 @@ class image_converter:
         self.counter = np.array([0.0], dtype='float64')
         self.ee_location_zx = (0,0)
         self.ee_location_zy = (0,0)
-        self.base_location = (0.0)
+        self.base_zy = (0.0)
+        self.base_zx = (0,0)
         # initialize the bridge between openCV and ROS
         self.bridge = CvBridge()
 
@@ -70,58 +71,49 @@ class image_converter:
             print(e)
 
         #Template match for base starts here-------------------------------------------------------
-        def template_match_for_base_zy(self,image1, template):
-            template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+        def find_blue_zy(self, image1, template):
+
             mask1 = cv2.inRange(image1, (0, 0, 0), (180, 255, 30))
-            thresh1, dst1 = cv2.threshold(mask1, 5, 255, cv2.THRESH_BINARY_INV)
+            thresh1, dst1 = cv2.threshold(mask1, 5, 255, cv2.THRESH_BINARY_INV )
 
-            for degrees in range(0, 360, 1):
-                rotate = imutils.rotate_bound(template, degrees)
-                w, h = rotate.shape[::-1]
-                res = cv2.matchTemplate(dst1, rotate, cv2.TM_CCOEFF_NORMED)
-                threshold = 0.6 #For EE make thsi 0.65 and for green make it 0.45 (keep tweaking it)
-                loc = np.where(res >= threshold)
+            w, h = template.shape
 
-                for pt in zip(*loc[::-1]):
+            res = cv2.matchTemplate(dst1,template,cv2.TM_CCOEFF_NORMED)
 
-                    try:
-                        pt = (int(statistics.mean(loc[1])), int(statistics.mean(loc[0])))
-                        print(pt)
-                        self.base_location = pt
-                    except Exception as e:
-                        pt = self.base_location
-                    rectangle = np.array([[pt[0], pt[1]], [pt[0] + w, pt[1]], [pt[0] + w, pt[1] + h], [pt[0], pt[1] + h]])
-                    # image1 = cv2.fillConvexPoly(image1, rectangle, (255, 0, 0))
-                    cv2.rectangle(image1, (pt[0], pt[1]), (pt[0]+w, pt[1]+h), (255, 0, 0), 2)
-                    # cv2.imshow("image_base1",image1)
+            threshold = 0.75
+            loc = np.where( res >= threshold)
 
-                    return np.array([pt[0],pt[1]])
-        def template_match_for_base_zx(self,image2, template):
-            template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+            pt = (int(statistics.mean(loc[1])),int(statistics.mean(loc[0])))
+            rectangle = np.array([[pt[0], pt[1]], [pt[0]+w, pt[1]], [pt[0]+w, pt[1]+h], [pt[0], pt[1]+h]])
+
+
+            radius = int(h/2)
+
+            center_of_blue = (pt[0] + radius, pt[1] + radius)
+
+            return center_of_blue
+
+        def find_blue_zx(self, image2, template):
+
             mask1 = cv2.inRange(image2, (0, 0, 0), (180, 255, 30))
-            thresh1, dst1 = cv2.threshold(mask1, 5, 255, cv2.THRESH_BINARY_INV)
+            thresh1, dst1 = cv2.threshold(mask1, 5, 255, cv2.THRESH_BINARY_INV )
 
-            for degrees in range(0, 360, 1):
-                rotate = imutils.rotate_bound(template, degrees)
-                w, h = rotate.shape[::-1]
-                res = cv2.matchTemplate(dst1, rotate, cv2.TM_CCOEFF_NORMED)
-                threshold = 0.6 #For EE make thsi 0.65 and for green make it 0.45 (keep tweaking it)
-                loc = np.where(res >= threshold)
+            w, h = template.shape
 
-                for pt in zip(*loc[::-1]):
+            res = cv2.matchTemplate(dst1,template,cv2.TM_CCOEFF_NORMED)
 
-                    try:
-                        pt = (int(statistics.mean(loc[1])), int(statistics.mean(loc[0])))
-                        print(pt)
-                        self.base_location = pt
-                    except Exception as e:
-                        pt = self.base_location
-                    rectangle = np.array([[pt[0], pt[1]], [pt[0] + w, pt[1]], [pt[0] + w, pt[1] + h], [pt[0], pt[1] + h]])
-                    # image1 = cv2.fillConvexPoly(image1, rectangle, (255, 0, 0))
-                    cv2.rectangle(image2, (pt[0], pt[1]), (pt[0]+w, pt[1]+h), (0, 0, 255), 2)
-                    # cv2.imshow("image_base2",image2)
+            threshold = 0.75
+            loc = np.where( res >= threshold)
 
-                    return np.array([pt[0],pt[1]])
+            pt = (int(statistics.mean(loc[1])),int(statistics.mean(loc[0])))
+            rectangle = np.array([[pt[0], pt[1]], [pt[0]+w, pt[1]], [pt[0]+w, pt[1]+h], [pt[0], pt[1]+h]])
+
+            radius = int(h/2)
+
+            center_of_blue = (pt[0] + radius, pt[1] + radius)
+
+            return center_of_blue
+
 
     #Template Match for green starts here---------------------------------------------------------
         def template_match_for_green_zy(self,image1, template):
@@ -276,9 +268,8 @@ class image_converter:
             # image1 = cv2.fillConvexPoly(image1, rectangle, (255, 0, 0))
             #rectangle = np.array([[pt[0], pt[1]], [pt[0] + w, pt[1]], [pt[0] + w, pt[1] + h], [pt[0], pt[1] + h]])
             #cv2.rectangle(image1, (pt[0], pt[1]), (pt[0]+w, pt[1]+h), (255, 0, 0), 2)
-            image1 = cv2.circle(image1, pt, 6, (0,0,255), -1)
+            image1 = cv2.circle(image1, pt, 8, (0,0,255), -1)
             #cv2.imshow("image_ee1",image1)
-
 
             return image1
 
@@ -317,10 +308,11 @@ class image_converter:
             y_start = int(self.ee_location_zy[1])
 
             pt = (x_start, y_start)
-
-
-            image2 = cv2.circle(image2, pt, 6, (0,0,255), -1)
-
+                        # image1 = cv2.fillConvexPoly(image1, rectangle, (255, 0, 0))
+                        #rectangle = np.array([[pt[0], pt[1]], [pt[0] + w, pt[1]], [pt[0] + w, pt[1] + h], [pt[0], pt[1] + h]])
+                        #cv2.rectangle(image1, (pt[0], pt[1]), (pt[0]+w, pt[1]+h), (255, 0, 0), 2)
+            image2 = cv2.circle(image2, pt, 8, (0,0,255), -1)
+                        #cv2.imshow("image_ee1",image1)
 
             return image2
 
@@ -340,7 +332,7 @@ class image_converter:
 
         counter = self.counter
 
-        template_for_base=cv2.imread("base_template.png")
+        template_for_base=cv2.imread("full_base.png",0)
         template_for_green=cv2.imread("green_template.png")
         template_for_EE=cv2.imread("ee_template.png")
 
@@ -354,39 +346,35 @@ class image_converter:
             ja2 = 0
             ja3 = 0
             ja4 = 0
+            if counter > 5:
+                self.base_zy = find_blue_zy(self, self.image1, template_for_base)
+                self.base_zx = find_blue_zy(self, self.image2, template_for_base)
 
 
 
 
         self.counter = counter + 1
 
-        image1 = template_match_for_ee_zy(self, self.image1, template_for_EE)
-        image2 = template_match_for_ee_zx(self, self.image2, template_for_EE)
-
-        cv2.imshow("image_ee2",image2)
-        cv2.imshow("image_ee1",image1)
-
-
-
-
-
-
-
-        # base_zy=template_match_for_base_zy(self,self.image1, template_for_base)
-        # base_zx = template_match_for_base_zx(self, self.image2, template_for_base)
-        #green_zy=template_match_for_green_zy(self, self.image1, template_for_green)
-        # green_zx = template_match_for_green_zx(self, self.image2, template_for_green)
-
-
-
-
-
-
         #
-        # print("Base values",ee_zx,ee_zy)
+        #image2 = template_match_for_ee_zx(self, self.image2, template_for_EE)
+
+        #cv2.imshow("image_ee2",image2)
+        #cv2.imshow("image_ee1",image1)
+
+        image1 = self.image1
+
+        image1 = cv2.circle(image1, self.base_zy, 14, (255,0,0), -1)
+        image1 = template_match_for_ee_zy(self, image1, template_for_EE)
+
+        #cv2.imshow("blue-red-1", image1)
 
 
+        image2 = self.image2
 
+        image2 = cv2.circle(image2, self.base_zx, 14, (255,0,0), -1)
+        image2 = template_match_for_ee_zx(self, image2, template_for_EE)
+
+        #cv2.imshow("blue-red-2", image2)
 
 
 
