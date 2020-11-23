@@ -70,181 +70,6 @@ class image_converter:
 
         #Blob detection starts here-------------------------------------------------------
 
-        def contour_method1(self,image1, image2):
-            gray1 = cv2.cvtColor(image1, cv2.COLOR_BGR2GRAY)
-            image1_blur=cv2.medianBlur(gray1,3)
-
-            cimg1 = cv2.cvtColor(image1_blur, cv2.COLOR_GRAY2BGR)
-            circles1 = cv2.HoughCircles(image1_blur, cv2.HOUGH_GRADIENT, 1, image1.shape[0]/64,param1=40, param2=22, minRadius=0, maxRadius=0)
-            # print(("Circle1",circles1))
-            if circles1 is not None:
-                circles1 = np.uint16(np.around(circles1))
-                for i in circles1[0, :]:
-                    cv2.circle(cimg1, (i[0], i[1]), i[2], (0, 255, 0), 2)
-                    cv2.circle(cimg1, (i[0], i[1]), 2, (0, 0, 255), 2)
-                    # if i[2]==13:
-                    #     c_blue_z1=i[0]
-                    #     c_blue_y=i[1]
-                    #     print("bluezy",c_blue_z1,c_blue_y)
-                    #
-                    # elif i[2]==8:
-                    #     c_red_z1=i[0]
-                    #     c_red_y=i[1]
-                    # print("red zy",c_red_z1,c_red_y)
-
-
-
-            gray2 = cv2.cvtColor(image2, cv2.COLOR_BGR2GRAY)
-            image2_blur = cv2.medianBlur(gray2, 3)
-
-            cimg2 = cv2.cvtColor(image2_blur, cv2.COLOR_GRAY2BGR)
-            circles2 = cv2.HoughCircles(image2_blur, cv2.HOUGH_GRADIENT, 1, 20, param1=45, param2=25, minRadius=0,
-                                       maxRadius=0)
-            # print(("Circle 2",circles2))
-            if circles2 is not None:
-                circles2 = np.uint16(np.around(circles2))
-                for j in circles2[0, :]:
-                    cv2.circle(cimg2, (j[0], j[1]), j[2], (0, 255, 0), 2)
-                    cv2.circle(cimg2, (j[0], j[1]), 2, (0, 0, 255), 2)
-                    if j[2]==13:
-                        c_blue_z2=j[0]
-                        c_blue_x=j[1]
-                        print("blue zx",c_blue_z2,c_blue_x)
-
-                    elif i[2]==8:
-                        c_red_z2=j[0]
-                        c_red_x=j[1]
-                        print ("red zx",c_red_z2,c_red_x)
-
-            # print(cx,cz1)
-            cv2.imshow('detected circles1', cimg1)
-            cv2.imshow('detected circles2', cimg2)
-
-
-            return 0
-
-        def contour_method2(self,image1,image2):
-            image1_gray=cv2.cvtColor(image1,cv2.COLOR_BGR2GRAY)
-            mask1=cv2.inRange(image1,(0,0,0),(180,255,30))
-            kernel_erode=np.ones((3,3),np.uint8)
-            kernel_dilate = np.ones((1, 1), np.uint8)
-            mask1=cv2.erode(mask1,kernel_erode,iterations=5)
-            mask1=cv2.dilate(mask1,kernel_dilate,iterations=2)
-
-            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2, 2))
-            opening = cv2.morphologyEx(mask1, cv2.MORPH_OPEN, kernel)
-
-            contours = cv2.findContours(mask1.copy(), cv2.RETR_EXTERNAL,
-                                        cv2.CHAIN_APPROX_SIMPLE)[0]
-            contours.sort(key=lambda x: cv2.boundingRect(x)[0])
-            cv2.drawContours(image1, contours, -1, (255, 255, 255), 1)
-
-            array = []
-            ii = 1
-            print len(contours)
-            for c in contours:
-                (x, y), r = cv2.minEnclosingCircle(c)
-                center = (int(x), int(y))
-                r = int(r)
-                if r >= 6 and r <= 10:
-                    cv2.circle(image1, center, r, (0, 255, 0), 2)
-                    array.append(center)
-
-            cv2.imshow("preprocessed", image1)
-            cv2.imshow("mask",mask1)
-            return 0
-
-        def contour_method3(self,image1,image2):
-            mask1 = cv2.inRange(image2, (0, 0, 0), (180, 255, 30))
-            cv2.imshow("mask",mask1)
-            #mask = np.zeros(image2.shape, dtype=np.uint8)
-            gray1 = cv2.cvtColor(image2, cv2.COLOR_BGR2GRAY)
-            thresh1 = cv2.threshold(gray1, 5, 255, cv2.THRESH_BINARY )[1]
-            kernel_erode1 = np.ones((3, 3), np.uint8)
-            kernel_dilate1 = np.ones((1, 1), np.uint8)
-            mask1 = cv2.erode(mask1, kernel_erode1, iterations=6)
-            mask1= cv2.dilate(mask1, kernel_dilate1, iterations=0)
-
-            kernel1 = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (4, 4))
-            opening1 = cv2.morphologyEx(mask1, cv2.MORPH_OPEN, kernel1)
-            canny1 = cv2.Canny(mask1, 100, 170)
-            cv2.imshow("canny1", canny1)
-            cimg1 = cv2.cvtColor(gray1, cv2.COLOR_GRAY2BGR)
-            cnts1 ,hierarchy1 = cv2.findContours(canny1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-            (x0, y0), radius0 = cv2.minEnclosingCircle(cnts1[0])
-            cx1, cz1 = (int(x0), int(y0))
-            radius0 = int(radius0)
-            print(cx1,cz1)
-            # (x1, y1), radius1 = cv2.minEnclosingCircle(cnts1[1])
-            # cx2, cz2 = (int(x1), int(y1))
-            # radius0 = int(radius1)
-
-            print(len(cnts1))
-
-            # circles = cv2.HoughCircles(canny1, cv2.HOUGH_GRADIENT, 1, 20, param1=20, param2=20, minRadius=0,
-            #                            maxRadius=0)
-            # if circles is not None:
-            #     circles = np.uint16(np.around(circles))
-            #     for i in circles[0, :]:
-            #         cv2.circle(cimg, (i[0], i[1]), i[2], (0, 255, 0), 2)
-            #         cv2.circle(cimg, (i[0], i[1]), 2, (0, 0, 255), 2)
-            # # #cv2.imshow('cimg', cimg)
-            return 0
-
-        def contour_method4(self,image1,image2):
-            #mask_ = cv2.bitwise_not(mask)
-            mask = np.zeros(image2.shape, dtype=np.uint8)
-            gray = cv2.cvtColor(image1, cv2.COLOR_BGR2GRAY)
-
-            thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY+ cv2.THRESH_OTSU)[1]
-            print(thresh)
-            #Filter using contour hierarchy
-            cnts, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-            hierarchy = hierarchy[0]
-            for component in zip(cnts, hierarchy):
-                currentContour = component[0]
-                currentHierarchy = component[1]
-                x, y, w, h = cv2.boundingRect(currentContour)
-                # Only select inner contours
-                if currentHierarchy[3] > 0:
-                    cv2.drawContours(mask, [currentContour], -1, (255, 255, 255), -1)
-
-            # Filter contours on mask using contour approximation
-            mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
-            cnts = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            print (len(cnts))
-            cnts = cnts[0] if len(cnts) == 2 else cnts[1]
-            for c in cnts:
-                peri = cv2.arcLength(c, True)
-                approx = cv2.approxPolyDP(c, 0.05 * peri, True)
-                if len(approx) > 5:
-                    cv2.drawContours(mask, [c], -1, (0, 0, 0), -1)
-                else:
-                    cv2.drawContours(image1, [c], -1, (36, 255, 12), 2)
-
-            cv2.imshow('thresh', thresh)
-            cv2.imshow('image', image1)
-            cv2.imshow('mask', mask)
-            return 0
-
-        def contour_method5(self,image1,image2):
-
-            template=cv2.imread("base_template.png")
-            w = template.shape[0]
-            h=template.shape[1]
-            res= cv2.matchTemplate(image2,template,cv2.TM_CCOEFF_NORMED)
-            min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
-            top_left = max_loc
-            bottom_right = (top_left[0] + w, top_left[1] + h)
-            cv2.rectangle(image2, top_left, bottom_right, 255, 2)
-            cv2.imshow("image1",image2)
-
-            return 0
-
-
-
-
         def angle_trajectory(self):
             curr_time = np.array([rospy.get_time() - self.time_trajectory])
             ja1 = 0.1
@@ -252,26 +77,6 @@ class image_converter:
             ja3 = float((np.pi / 2) * np.sin((np.pi / 18) * curr_time))
             ja4 = float((np.pi / 2) * np.sin((np.pi / 20) * curr_time))
             return np.array([ja1, ja2, ja3, ja4])
-
-
-
-        def contour_method6(self,image1,image2):
-            hsv=cv2.cvtColor(image1,cv2.COLOR_BGR2HSV)
-            mask=cv2.inRange(hsv,(0,0,0),(250,250,0))
-
-            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (6, 6))
-            opening = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
-            canny = cv2.Canny(opening, 150, 150)
-            # canny = cv2.Canny(mask, 30, 70)
-            cnts = cv2.findContours(canny, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0]
-            cv2.drawContours(self.image1, cnts, -1, (255, 255, 255), -1)
-            #print(len(cnts))
-
-            cv2.imshow("canny", canny)
-            cv2.imshow("img", self.image1)
-            return 0
-
-
 
         def template_match_base(self, image1, image2, template):
             mask1 = cv2.inRange(image1, (0, 0, 0), (180, 255, 30))
@@ -310,7 +115,6 @@ class image_converter:
 
 
             return image1
-
 
         def ee_template_match(self, image1, image2, base_template, ee_template):
             image1 = template_match_base(self,self.image1,self.image2, base_template)
@@ -369,7 +173,7 @@ class image_converter:
             #incomplete code
             w, h = template.shape[::-1]
 
-            if counter < 20:
+            if counter < 5:
                 mask1 = cv2.inRange(image1, (0, 0, 0), (180, 255, 30))
                 thresh1, dst1 = cv2.threshold(mask1, 5, 255, cv2.THRESH_BINARY_INV )
 
@@ -383,12 +187,6 @@ class image_converter:
                     self.green_location = pt
                 except Exception as e:
                     pt  = self.green_location
-
-
-                boxes = create_boxes(pt,w,h)
-
-
-                cv2.imshow("middle", dst)
 
 
             else:
@@ -440,7 +238,6 @@ class image_converter:
 
 
 
-
         self.joints = Float64MultiArray()
         #self.joints.data = detect_angles_blob(self,self.image1,self.image2)
 
@@ -449,7 +246,7 @@ class image_converter:
 
         if counter > 30:
             ja1,ja2,ja3,ja4=angle_trajectory(self)
-            if counter > 500:
+            if counter > 200:
                 counter = 0
         else:
             ja1 = 0
@@ -464,12 +261,7 @@ class image_converter:
         ee_template = cv2.imread("/home/boniface/catkin_ws/src/ivr_assignment/src/python_codes/Yogi/ee_template_2.png", 0)
         middle_template = cv2.imread("/home/boniface/catkin_ws/src/ivr_assignment/src/python_codes/Yogi/middle_template.png", 0)
 
-        #template_match_base(self, self.image1, self.image2, base_template)
-        #image1 = template_match_base(self,self.image1,self.image2, base_template)
 
-        #image1 = ee_template_match(self, self.image1, self.image2, base_template, ee_template)
-
-        #contour_method4(self,image1,self.image2)
         cv2.waitKey(1)
 
         draw_box(self, self.image1, self.image2, middle_template, counter, base_template, ee_template)
