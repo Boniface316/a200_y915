@@ -249,7 +249,7 @@ class image_converter:
             return np.array([ja1, ja2, ja3, ja4])
 
         #contour_method2(self,self.image1,self.image2)
-        contour_method1(self, self.image1, self.image2)
+        contour_method4(self, self.image1, self.image2)
         cv2.waitKey(1)
 
         self.joints = Float64MultiArray()
