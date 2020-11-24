@@ -56,6 +56,17 @@ class image_converter:
         self.green_top_right_boundary_zy = (0,0)
         self.green_bottom_right_boundary_zy = (0,0)
         self.green_bottom_left_boundary_zy = (0,0)
+        self.green_top_left_boundary_zx = (0,0)
+        self.green_top_right_boundary_zx = (0,0)
+        self.green_bottom_right_boundary_zx = (0,0)
+        self.green_bottom_left_boundary_zx = (0,0)
+        self.green_location_zy = (0,0)
+        self.base_top_left_zx = (0,0)
+        self.base_bottom_right_zx = (0,0)
+        self.base_top_left_zy = (0,0)
+        self.base_bottom_right_zy = (0,0)
+
+
 
         # initialize the bridge between openCV and ROS
         self.bridge = CvBridge()
@@ -91,6 +102,9 @@ class image_converter:
             pt = (int(statistics.mean(loc[1])),int(statistics.mean(loc[0])))
             rectangle = np.array([[pt[0], pt[1]], [pt[0]+w, pt[1]], [pt[0]+w, pt[1]+h], [pt[0], pt[1]+h]])
 
+            self.base_top_left_zy = pt
+            self.base_bottom_right_zy = (pt[0] + h, pt[1] + w)
+
 
             radius = int(h/2)
 
@@ -113,6 +127,9 @@ class image_converter:
             pt = (int(statistics.mean(loc[1])),int(statistics.mean(loc[0])))
             rectangle = np.array([[pt[0], pt[1]], [pt[0]+w, pt[1]], [pt[0]+w, pt[1]+h], [pt[0], pt[1]+h]])
 
+            self.base_top_left_zx = pt
+            self.base_bottom_right_zx = (pt[0] + h, pt[1] + w)
+
             radius = int(h/2)
 
             center_of_blue = (pt[0] + radius, pt[1] + radius)
@@ -123,70 +140,209 @@ class image_converter:
         def define_green_boundary_zy(self,image,template, blue_posn):
             h,_ = template.shape
 
-            self.green_top_left_boundary_zy = (blue_posn[0] - h, blue_posn[1] - h)
-            self.green_top_right_boundary_zy = (blue_posn[0] + h,blue_posn[1] - h)
-            self.green_bottom_right_boundary_zy = (blue_posn[0]+ h,blue_posn[1] + 25)
-            self.green_bottom_left_boundary_zy = (blue_posn[0] - h,blue_posn[1]+ 25)
+            self.green_top_left_boundary_zy = (blue_posn[0] - h - 15, blue_posn[1] - h-15)
+            self.green_top_right_boundary_zy = (blue_posn[0] + h + 15,blue_posn[1] - h-15)
+            self.green_bottom_right_boundary_zy = (blue_posn[0]+ h + 15,blue_posn[1] + 25)
+            self.green_bottom_left_boundary_zy = (blue_posn[0] - h - 15,blue_posn[1]+ 25)
 
             return 0
+
+        def define_green_boundary_zx(self,image,template, blue_posn):
+            h,_ = template.shape
+
+            self.green_top_left_boundary_zx = (blue_posn[0] - h - 15, blue_posn[1] - h-15)
+            self.green_top_right_boundary_zx = (blue_posn[0] + h + 15,blue_posn[1] - h-15)
+            self.green_bottom_right_boundary_zx = (blue_posn[0]+ h + 15,blue_posn[1] + 25)
+            self.green_bottom_left_boundary_zx = (blue_posn[0] - h - 15,blue_posn[1]+ 25)
+
+            return 0
+
+        def create_boxes(pt,w,h):
+            box_3 = (pt[0]-w, pt[1])
+            box_0 = (box_3[0], box_3[1] - h)
+            box_1 = (box_0[0]+w, box_0[1])
+            box_2 = (box_1[0]+w, box_1[1])
+            box_6 = (box_3[0], box_3[1] + h)
+            box_5 = (pt[0]+w, pt[1])
+            box_7 = (box_6[0]+w, box_6[1])
+            box_8 = (box_7[0]+w, box_7[1])
+            boxes = (box_0, box_1, box_2, box_3, pt, box_5, box_6, box_7, box_8)
+
+            return boxes
+
+        def draw_box_zy(self, image, template, counter):
+
+            w, h = template.shape
+
+            if counter < 10:
+                print("counter less than 10")
+
+            elif counter > 9 and counter < 15:
+                print("counter between 10 and 15")
+                mask1 = cv2.inRange(image, (0, 0, 0), (180, 255, 30))
+                thresh1, dst1 = cv2.threshold(mask1, 5, 255, cv2.THRESH_BINARY_INV )
+
+                res = cv2.matchTemplate(dst1,template,cv2.TM_CCOEFF_NORMED)
+
+                threshold = 0.9
+                loc = np.where( res >= threshold)
+
+
+                try:
+                    pt = (int(statistics.mean(loc[1])),int(statistics.mean(loc[0])))
+                    self.green_location_zy = pt
+                except Exception as e:
+                    pt  = self.green_location_zy
+
+                cv2.circle(image, pt, 10, (0,255,0), -1)
+                #cv2.imshow("image-center", image1)
+
+            else:
+
+                image = cv2.rectangle(image, self.base_top_left_zy, self.base_bottom_right_zy, (255,255,255), -1)
+                boxes  = create_boxes(self.green_location_zy, w, h)
+                green_location = count_black_pixels(boxes, image, template)
+                green_location = readjust_green_location_zy(self, green_location)
+                self.green_location_zy = green_location
+                image = cv2.circle(image, green_location, 10, (0,255,0), -1)
+
+
+
+            return image
+
+        def readjust_green_location_zy(self,green_location_zy):
+            x_boundary_left =  self.green_top_left_boundary_zy[0]
+            x_boundary_right = self.green_top_right_boundary_zy[0]
+            y_boundary_bottom = self.green_bottom_left_boundary_zy[1]
+            y_boundary_top = self.green_top_left_boundary_zy[1]
+
+            x = green_location_zy[0]
+            y = green_location_zy[1]
+
+            if green_location_zy[0] < x_boundary_left:
+                x = x_boundary_left
+            elif green_location_zy[0] > x_boundary_right:
+                x = x_boundary_right
+            elif green_location_zy[1] < y_boundary_bottom:
+                y = y_boundary_bottom
+            elif green_location_zy[1] > y_boundary_top:
+                y = y_boundary_top
+
+            green_location_zy = (x,y)
+
+            return green_location_zy
+
+        def draw_box_zx(self, image, template, counter):
+
+            w, h = template.shape
+
+            if counter < 10:
+                print("counter less than 10")
+
+            elif counter > 9 and counter < 15:
+                print("counter between 10 and 15")
+                mask1 = cv2.inRange(image, (0, 0, 0), (180, 255, 30))
+                thresh1, dst1 = cv2.threshold(mask1, 5, 255, cv2.THRESH_BINARY_INV )
+
+                res = cv2.matchTemplate(dst1,template,cv2.TM_CCOEFF_NORMED)
+
+                threshold = 0.9
+                loc = np.where( res >= threshold)
+
+
+                try:
+                    pt = (int(statistics.mean(loc[1])),int(statistics.mean(loc[0])))
+                    self.green_location_zx = pt
+                except Exception as e:
+                    pt  = self.green_location_zx
+
+                cv2.circle(image, pt, 10, (0,255,0), -1)
+                cv2.imshow("mid", image)
+
+
+            else:
+
+                image = cv2.rectangle(image, self.base_top_left_zx, self.base_bottom_right_zx, (255,255,255), -1)
+                print("------")
+
+                print(self.base_top_left_zx)
+                print(self.base_bottom_right_zx)
+                boxes  = create_boxes(self.green_location_zx, w, h)
+                green_location = count_black_pixels(boxes, image, template)
+                green_location = readjust_green_location_zx(self, green_location)
+                self.green_location_zx = green_location
+                image = cv2.circle(image, green_location, 10, (0,255,0), -1)
+
+            return image
+
+        def readjust_green_location_zx(self,green_location_zx):
+            x_boundary_left =  self.green_top_left_boundary_zx[0]
+            x_boundary_right = self.green_top_right_boundary_zx[0]
+            y_boundary_bottom = self.green_bottom_left_boundary_zx[1]
+            y_boundary_top = self.green_top_left_boundary_zx[1]
+
+            x = green_location_zx[0]
+            y = green_location_zx[1]
+
+            if green_location_zx[0] < x_boundary_left:
+                x = x_boundary_left
+            elif green_location_zx[0] > x_boundary_right:
+                x = x_boundary_right
+            elif green_location_zx[1] < y_boundary_bottom:
+                y = y_boundary_bottom
+            elif green_location_zx[1] > y_boundary_top:
+                y = y_boundary_top
+
+            green_location_zx = (x,y)
+
+            return green_location_zx
+
+        def count_black_pixels(boxes, image, template):
+            counts = []
+            mask = cv2.inRange(image, (0, 0, 0), (180, 255, 30))
+            thresh, dst = cv2.threshold(mask, 5, 255, cv2.THRESH_BINARY_INV )
+
+
+            w, h = template.shape[::-1]
+
+            for box in boxes:
+
+
+                x_start = box[0]
+                y_start = box[1]
+                x_end = x_start + w
+                y_end = y_start + h
+                cropped_image = dst[y_start:y_end, x_start:x_end]
+
+                white_pixels_count = cv2.countNonZero(cropped_image)
+                total_number_of_pixel = cropped_image.shape[0]*cropped_image.shape[1]
+                black_pixel_count = total_number_of_pixel - white_pixels_count
+                counts.append(black_pixel_count)
+            #    print("counts in loop")
+            #    print(counts)
+            #    print("black pixels: " + str(black_pixel_count))
+
+            #print("counts: ")
+            #print(counts)
+
+            green_location_box = np.argmax(counts)
+            #print("green location box: " + str(green_location_box))
+            box_location = boxes[green_location_box]
+
+            x_start = box_location[0]
+            y_start = box_location[1]
+            x_end = x_start + w
+            y_end = y_start + h
+            center_of_box = (int((x_start+x_end)/2),int((y_start + y_end)/2))
+
+            return center_of_box
+
+
 
 
 
 
     #Template Match for green starts here---------------------------------------------------------
-        def template_match_for_green_zy(self,image1, template):
-            template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
-            mask1 = cv2.inRange(image1, (0, 0, 0), (180, 255, 30))
-            thresh1, dst1 = cv2.threshold(mask1, 5, 255, cv2.THRESH_BINARY_INV)
-
-            for degrees in range(0, 360, 1):
-                rotate = imutils.rotate_bound(template, degrees)
-                w, h = rotate.shape[::-1]
-                res = cv2.matchTemplate(dst1, rotate, cv2.TM_CCOEFF_NORMED)
-                threshold = 0.45 #For EE make thsi 0.65 and for green make it 0.45 (keep tweaking it)
-                loc = np.where(res >= threshold)
-
-                for pt in zip(*loc[::-1]):
-
-                    try:
-                        pt = (int(statistics.mean(loc[1])), int(statistics.mean(loc[0])))
-                        print(pt)
-                        self.base_location = pt
-                    except Exception as e:
-                        pt = self.base_location
-                    rectangle = np.array([[pt[0], pt[1]], [pt[0] + w, pt[1]], [pt[0] + w, pt[1] + h], [pt[0], pt[1] + h]])
-                    # image1 = cv2.fillConvexPoly(image1, rectangle, (255, 0, 0))
-                    cv2.rectangle(image1, (pt[0], pt[1]), (pt[0]+w, pt[1]+h), (255, 0, 0), 2)
-                    # cv2.imshow("image_green1",image1)
-
-                    return np.array([pt[0],pt[1]])
-
-        def template_match_for_green_zx(self,image2, template):
-            template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
-            mask1 = cv2.inRange(image2, (0, 0, 0), (180, 255, 30))
-            thresh1, dst1 = cv2.threshold(mask1, 5, 255, cv2.THRESH_BINARY_INV)
-
-            for degrees in range(0, 360, 1):
-                rotate = imutils.rotate_bound(template, degrees)
-                w, h = rotate.shape[::-1]
-                res = cv2.matchTemplate(dst1, rotate, cv2.TM_CCOEFF_NORMED)
-                threshold = 0.45 #For EE make thsi 0.65 and for green make it 0.45 (keep tweaking it)
-                loc = np.where(res >= threshold)
-
-                for pt in zip(*loc[::-1]):
-
-                    try:
-                        pt = (int(statistics.mean(loc[1])), int(statistics.mean(loc[0])))
-                        print(pt)
-                        self.base_location = pt
-                    except Exception as e:
-                        pt = self.base_location
-                    rectangle = np.array([[pt[0], pt[1]], [pt[0] + w, pt[1]], [pt[0] + w, pt[1] + h], [pt[0], pt[1] + h]])
-                    # image1 = cv2.fillConvexPoly(image1, rectangle, (255, 0, 0))
-                    cv2.rectangle(image2, (pt[0], pt[1]), (pt[0]+w, pt[1]+h), (0, 0, 255), 2)
-                    # cv2.imshow("image_green2",image2)
-
-                    return np.array([pt[0],pt[1]])
 
         #Template Match for EE starts here------------------------------------------
 
@@ -349,7 +505,7 @@ class image_converter:
         counter = self.counter
 
         template_for_base=cv2.imread("full_base.png",0)
-        template_for_green=cv2.imread("green_template.png")
+        template_for_green=cv2.imread("green_template.png",0)
         template_for_EE=cv2.imread("ee_template.png")
         template_for_arm = cv2.imread("arm2_template.png",0)
 
@@ -363,41 +519,48 @@ class image_converter:
             ja2 = 0
             ja3 = 0
             ja4 = 0
-            if counter > 5:
+            if counter > 1:
                 self.base_zy = find_blue_zy(self, self.image1, template_for_base)
-                self.base_zx = find_blue_zy(self, self.image2, template_for_base)
+                self.base_zx = find_blue_zx(self, self.image2, template_for_base)
                 define_green_boundary_zy(self, self.image1, template_for_arm, self.base_zy)
+                define_green_boundary_zx(self, self.image2, template_for_arm, self.base_zx)
 
 
 
 
         self.counter = counter + 1
 
-        #
-        #image2 = template_match_for_ee_zx(self, self.image2, template_for_EE)
+        print("counter" + str(counter))
 
-        #cv2.imshow("image_ee2",image2)
-        #cv2.imshow("image_ee1",image1)
+
+
 
         image1 = self.image1
 
-        #image1 = cv2.circle(image1, self.base_zy, 14, (255,0,0), -1)
-        #image1 = template_match_for_ee_zy(self, image1, template_for_EE)
+        image1 = template_match_for_ee_zy(self, image1, template_for_EE)
 
-        start_x_y = self.green_top_left_boundary_zy
-        end_x_y = self.green_bottom_right_boundary_zy
+        image1 = draw_box_zy(self, image1, template_for_green, counter)
+        image1 = cv2.circle(image1, self.base_zy, 20, (255,0,0), -1)
 
-        image1 = cv2.rectangle(image1, start_x_y,end_x_y, (0,0,0), 2)
+        cv2.imshow("boundary-1", image1)
 
-        cv2.imshow("boundary", image1)
+        image2 = self.image2
+
+        #start_z_x = self.green_top_left_boundary_zx
+        #end_z_x = self.green_bottom_right_boundary_zx
 
 
-        #image2 = self.image2
 
-        #image2 = cv2.circle(image2, self.base_zx, 14, (255,0,0), -1)
-        #image2 = template_match_for_ee_zx(self, image2, template_for_EE)
 
-        #cv2.imshow("blue-red-2", image2)
+        #image2 = cv2.circle(image2, self.base_zx, 20, (255,0,0), -1)
+        image2 = template_match_for_ee_zx(self, image2, template_for_EE)
+        image2 = draw_box_zx(self, image2, template_for_green, counter)
+        image2 = cv2.circle(image2, self.base_zx, 20, (255,0,0), -1)
+
+
+        cv2.imshow("boundary-2", image2)
+
+
 
 
 
