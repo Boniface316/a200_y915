@@ -67,6 +67,10 @@ class image_converter:
         self.base_bottom_right_zx = (0,0)
         self.base_top_left_zy = (0,0)
         self.base_bottom_right_zy = (0,0)
+        self.p2m = 0.03846153846
+        self.yellow_zx = (0,0)
+        self.yellow_zy = (0,0)
+
 
 
 
@@ -147,6 +151,25 @@ class image_converter:
 
             return image
 
+        def yellow_circle_zy(self, image, base_template):
+            w,h = base_template.shape
+            radius = int(h/2)
+            center_yellow = (self.base_bottom_right_zy[0] - radius, self.base_bottom_right_zy[1])
+            self.yellow_zy = center_yellow
+            image = cv2.circle(image, center_yellow, 20, (0,255,255), -1)
+
+            return image
+
+        def yellow_circle_zx(self, image, base_template):
+            w,h = base_template.shape
+            radius = int(h/2)
+            center_yellow = (self.base_bottom_right_zx[0] - radius, self.base_bottom_right_zx[1])
+            self.yellow_zx = center_yellow
+            image = cv2.circle(image, center_yellow, 20, (0,255,255), -1)
+
+            return image
+
+
         #Template Match for green starts here---------------------------------------------------------
 
         def find_middle_zy(self, image, template):
@@ -160,7 +183,6 @@ class image_converter:
 
             for threshold in range(9, 1, -1):
                 threshold = threshold/10.0
-                print(threshold)
                 loc = np.where( res >= threshold)
 
                 loc_0_not_empty  = is_not_empty(loc[0])
@@ -230,9 +252,6 @@ class image_converter:
 
 
             return image
-
-
-
 
         #Template Match for EE starts here------------------------------------------
 
@@ -388,8 +407,71 @@ class image_converter:
             ja4 = float((np.pi / 2) * np.sin((np.pi / 20) * curr_time))
             return np.array([ja1, ja2, ja3, ja4])
 
+        #Blob detection starts here---------------------------------------------------------
+
+
+
 
         #Angle Detection starts here---------------------------------------------------------
+
+        def get_ja3(green_posn, yellow_posn, p):
+            green = green_posn - yellow_posn
+            X_green = green[0]*p
+            if X_green > 3.5:
+                X_green = 3.5
+            elif X_green < -3.5:
+                X_green = -3.5
+
+            ja3 = np.arcsin(X_green/ 3.5)
+            return ja3
+
+        def get_ja2(green_posn, yellow_posn, p, ja3):
+            green = green_posn - yellow_posn
+            Y_green = green[1]*p
+
+            if Y_green > 3.5:
+                Y_green = 3.5
+            elif Y_green < -3.5:
+                Y_green = -3.5
+
+            arc_sin_val = np.round(Y_green/(-3.5*np.cos(ja3)),2)
+
+            if arc_sin_val > 1:
+                arc_sin_val = 1
+            elif arc_sin_val < -1:
+                arc_sin_val = -1
+
+            ja2 = np.arcsin(arc_sin_val)
+
+            return ja2
+
+        def detect_angles_blob(self,image1,image2):
+
+            p = self.p2m
+
+            green = np.array([self.green_location_zx[0], self.green_location_zy[0], self.green_location_zx[1]])
+            red = np.array([self.ee_location_zx[0],self.ee_location_zy[0], self.ee_location_zx[1]])
+            blue = np.array([self.base_zx[0], self.base_zy[0], self.base_zx[1]])
+            yellow = np.array([self.yellow_zx[0], self.yellow_zy[0], self.yellow_zx[0]])
+
+            green[2] = 800 - green[2]
+            yellow[2] = 800 - yellow[2]
+            red[2] = 800 - red[2]
+
+
+            ja1=0.0
+            ja3 = get_ja3(green, yellow, p)
+            ja2 = get_ja2(green, yellow, p, ja3)
+
+
+            green = p*np.array([self.green_location_zx[0], self.green_location_zy[0], self.green_location_zx[1]])
+            red = p*np.array([self.ee_location_zx[0],self.ee_location_zy[0], self.ee_location_zx[1]])
+            blue = p*np.array([self.base_zx[0], self.base_zy[0], self.base_zx[1]])
+            yellow = p*np.array([self.yellow_zx[0], self.yellow_zy[0], self.yellow_zx[0]])
+
+            ja4 = np.arctan2((green[2] - red[2]), -(green[1] - red[1]))-np.pi/2-ja2
+
+            return np.array([ja1,ja2,ja3,ja4])
 
         counter = self.counter
 
@@ -399,12 +481,13 @@ class image_converter:
         template_for_arm = cv2.imread("arm2_template.png",0)
         template_for_middle_blob = cv2.imread("middle_blob.png",0)
 
-        if counter > 30:
+        if counter > 10:
             ja1,ja2,ja3,ja4=angle_trajectory(self)
             if counter > 200:
                 counter = 0
 
         else:
+            print("initializing the robot")
             ja1 = 0
             ja2 = 0
             ja3 = 0
@@ -418,11 +501,6 @@ class image_converter:
 
         self.counter = counter + 1
 
-        print("counter" + str(counter))
-
-
-
-
         image1 = self.image1
 
         image1 = template_match_for_ee_zy(self, image1, template_for_EE)
@@ -430,37 +508,37 @@ class image_converter:
 
         image1 = cv2.circle(image1, self.base_zy, 20, (255,0,0), -1)
 
+
+
         image1 = find_middle_zy(self, image1, template_for_middle_blob)
 
-        #image1 = contour_method6(self, image1)
-
-        cv2.imshow("boundary-1", image1)
-
-        #cv2.imwrite("image1.png", image1)
-
+        image1 = yellow_circle_zy(self, image1, template_for_base)
 
 
         image2 = self.image2
 
-        #start_z_x = self.green_top_left_boundary_zx
-        #end_z_x = self.green_bottom_right_boundary_zx
+        image2 = template_match_for_ee_zx(self, image2, template_for_EE)
+        image2 = cover_base_zx(self, image2)
+
+        image2 = cv2.circle(image2, self.base_zx, 20, (255,0,0), -1)
+
+        image2 = find_middle_zx(self, image2, template_for_middle_blob)
+
+        image2 = yellow_circle_zx(self, image2, template_for_base)
+
+
+        ja = detect_angles_blob(self,image1,image2)
 
 
 
 
-        #image2 = cv2.circle(image2, self.base_zx, 20, (255,0,0), -1)
-        #image2 = template_match_for_ee_zx(self, image2, template_for_EE)
 
-        #image2 = cv2.circle(image2, self.base_zx, 20, (255,0,0), -1)
-
-
-        #cv2.imshow("boundary-2", image2)
 
 
         cv2.waitKey(1)
 
         self.joints = Float64MultiArray()
-        #self.joints.data = detect_angles_blob(self,self.image1,self.image2)
+        self.joints.data = detect_angles_blob(self,self.image1,self.image2)
         #ja1,ja2,ja3,ja4=angle_trajectory(self)
         self.joint1 = Float64()
         self.joint1.data = ja1
