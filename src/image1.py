@@ -34,11 +34,9 @@ class image_converter:
     except CvBridgeError as e:
       print(e)
 
-    cur_time = np.array([int(rospy.get_time() - self.first_time)])
-
     # Uncomment if you want to save the image
-    cv2.imwrite(str(cur_time)+'.png', self.cv_image1)
-    print(cur_time)
+    cv2.imwrite('image1.png', self.cv_image1)
+
 
     im1=cv2.imshow('window1', self.cv_image1)
     cv2.waitKey(1)
