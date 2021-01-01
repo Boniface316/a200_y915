@@ -1,6 +1,6 @@
-![GitHub repo size](https://img.shields.io/github/repo-size/Boniface316/AlphavantageForex)
-![GitHub top language](https://img.shields.io/github/languages/top/Boniface316/AlphavantageForex)
-![GitHub last commit](https://img.shields.io/github/last-commit/Boniface316/AlphavantageForex)
+![GitHub repo size](https://img.shields.io/github/repo-size/Boniface316/a200_y915)
+![GitHub top language](https://img.shields.io/github/languages/top/Boniface316/a200_y915)
+![GitHub last commit](https://img.shields.io/github/last-commit/Boniface316/a200_y915)
 
 
 # Computer vision and robotics
