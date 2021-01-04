@@ -42,6 +42,8 @@ This objective of this project is to use CV to find the joint angles of the robo
 1. The description of each links are provided below:
 
 ![Description of links](https://github.com/Boniface316/a200_y915/blob/master/images/robot_table.png?raw=true)
+
+
 2. To move the robot, you can use the command ```rostopic pub -1 /robot/joint1 position controller/command std msgs/Float64 “data: 1.0”``` or bash files called ```single_joint.sh``` or ```arm_move.sh``` in folder [tools](https://github.com/Boniface316/a200_y915/tree/master/src/tools).
 3. You are required to specify the joint number and the angles in rads in order to move.
 4. To view the robot from both camera, run the file ```two_cam_open.py``` in [tools](https://github.com/Boniface316/a200_y915/tree/master/src/tools).
